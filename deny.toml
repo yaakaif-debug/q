@@ -1,0 +1,40 @@
+# cargo-deny: лицензии и уязвимости зависимостей.
+
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unlicense",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+]
+
+[licenses.private]
+# собственные крейты не публикуются
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# внутренние path-зависимости без версии — не «wildcard» для крейтов, которые не публикуются
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

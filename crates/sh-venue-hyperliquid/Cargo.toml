@@ -1,0 +1,22 @@
+[package]
+name = "sh-venue-hyperliquid"
+description = "Hyperliquid core + HIP-3 public market-data adapter (M0: no signing)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sh-core.workspace = true
+sh-venue-api.workspace = true
+sh-md.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+
+[lints]
+workspace = true

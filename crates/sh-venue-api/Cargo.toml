@@ -1,0 +1,28 @@
+[package]
+name = "sh-venue-api"
+description = "MarketData trait, normalised events, shared WS/REST plumbing for venue adapters"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sh-core.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+governor.workspace = true
+metrics.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
