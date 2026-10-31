@@ -61,7 +61,7 @@ APR_v = r_v \cdot \frac{8760}{h_v}, \qquad s = APR_{short} - APR_{long}
 - **Break-even.** H\_be = cost / (s / 8760) hours. Enter only if H\_be ≤ `max_breakeven_hours` (default 72) and expected s\_net ≥ `min_net_apr` (default 12%).
 - **Exit.** s\_ema below `exit_apr` (default 3%) for `m_intervals` in a row; or another pair beats the current one by `switch_margin` after both switching costs; or any risk trigger.
 - **Pair eligibility.** Map instruments to a canonical underlying ID through `config/symbols.toml` plus auto-matching that needs operator approval. Reject pairs whose marks come from different underlyings (pre-IPO perps, differently constructed indices) unless allowlisted.
-- **Collateral basis.** Hyperliquid core and Lighter margin in USDC; Aster contracts are USDT-quoted. USDT/USDC is tracked as a PnL component and in risk.
+- **Collateral basis.** Hyperliquid core and Lighter margin in USDC; Aster collateral is set per contract by `marginAsset` (USDT, USDC, USD1 or U, from metadata). Each non-USDC collateral against USDC is tracked as a PnL component and in risk.
 
 ### S2 — intra-Hyperliquid cross-dex carry
 
@@ -85,7 +85,7 @@ Trade the deviation of the cross-venue mid spread d = (mid\_a − mid\_b) / mid 
 
 ### S5 — maker-first execution
 
-Post-only on the leg with the cheaper maker side (Aster 0% maker; Lighter Standard 0% with a 200 ms maker delay, or Premium with no maker delay for a fee; HIP-3 per dex). Price it off the hedge venue's BBO minus hedge taker fee, expected slippage and `edge_bps`. On every fill, send an IOC hedge on the other venue within `hedge_timeout_ms`.
+Post-only on the leg with the cheaper maker side (Aster 0% maker; Lighter Standard 0% with no maker delay but 300 ms on takers and on cancels/modifies, which slows repricing, or Premium for a fee with 140 ms on takers and no delay on cancels or post-only orders; HIP-3 per dex). Price it off the hedge venue's BBO minus hedge taker fee, expected slippage and `edge_bps`. On every fill, send an IOC hedge on the other venue within `hedge_timeout_ms`.
 
 ### S6 — funding rate lock (optional)
 
@@ -103,8 +103,8 @@ MVP connects to four venue families from one Linux host in Tokyo. Every adapter 
 | --- | --- | --- | --- | --- | --- | --- |
 | Hyperliquid core | S1 and S2 leg, primary | 0.015% / 0.045% | 1 h | USDC | AWS ap-northeast-1 (Tokyo) | `api.hyperliquid.xyz` REST + WS; an agent (API) wallet signs orders and cannot withdraw |
 | Hyperliquid HIP-3 dexes | S2 legs, S1 leg | Default 2× core, deployers may discount (tradeXYZ shows 0.003% / 0.009%) | From metadata | Per dex: USDC, USDH, USDE | Same as core | Same API with a `dex` parameter; tickers such as `xyz:NVDA` |
-| Lighter | S1 leg, S5 maker venue | Standard 0% / 0% with 200 ms maker and 300 ms taker delay; Premium 0.004% / 0.028% at 0 LIT, no maker delay | From API | USDC | Unknown, measure | REST `mainnet.zklighter.elliot.ai/api/v1/`, WS `/stream`, chain ID 304; signing through the official `lighter-go` shared library over FFI |
-| Aster | S1 third leg, S5 maker venue | 0% / 0.04% | Per symbol, from metadata | USDT-quoted contracts | Unknown, measure | v3 REST `fapi.asterdex.com/fapi/v3`, WS `fstream.asterdex.com`; EIP-712 signature by an API wallet on behalf of the main wallet, nonce in microseconds; testnet `fapi.asterdex-testnet.com` |
+| Lighter | S1 leg, S5 maker venue | Standard 0% / 0% with 0 ms maker, 300 ms taker and 300 ms cancel/modify delay; Premium 0.004% / 0.028% at 0 LIT with 140 ms taker delay and no delay on cancels or post-only orders | From API | USDC | Unknown, measure | REST `mainnet.zklighter.elliot.ai/api/v1/`, WS `/stream`, chain ID 304; signing through the official `lighter-go` shared library over FFI |
+| Aster | S1 third leg, S5 maker venue | 0% / 0.04% | Per symbol, from metadata | Per contract from `marginAsset`: USDT, USDC, USD1, U | Unknown, measure | v3 REST `fapi.asterdex.com/fapi/v3`, WS `fstream.asterdex.com`; EIP-712 signature by an API wallet on behalf of the main wallet, nonce in microseconds; testnet `fapi.asterdex-testnet.com` |
 
 As of 2026-10-29 from [arb.sh](https://arb.sh/), [HIP-3 docs](https://hyperliquid.gitbook.io/Hyperliquid-docs/hyperliquid-improvement-proposals-hips/hip-3-builder-deployed-perpetuals), [Lighter fees](https://docs.lighter.xyz/trading), [Lighter endpoints](https://apidocs.lighter.xyz/docs/environments), [Aster API v3](https://asterdex.github.io/aster-api-website/futures-v3/general-info/).
 
@@ -155,7 +155,7 @@ Strategies never call venues; the risk gate also takes the reconciled book from 
 | `sh-risk` | Pre-trade checks, continuous monitors, kill switch |
 | `sh-exec` | Child-order slicing, leg sequencing, hedge timeouts, unwind, order state machine |
 | `sh-portfolio` | Positions and balances per venue and collateral asset, reconciliation, PnL attribution, rebalance planner |
-| `sh-store` | SQLite (WAL) for state and ledger, raw recorder, Parquet derivation |
+| `sh-store` | SQLite (WAL) for state and ledger, raw recorder, Parquet derivation (M1) |
 | `sh-sim` | Simulated venue, fill models, replay driver |
 | `sh-obs` | Tracing setup, Prometheus metrics, Telegram alerts |
 
@@ -169,7 +169,7 @@ Binaries: `spread-hunter` (daemon, all run modes), `spread-ctl` (control CLI ove
 
 ### Approved dependencies
 
-tokio, tokio-tungstenite and reqwest (both with rustls), serde, serde\_json, rust\_decimal, figment, clap, chrono, thiserror, anyhow, tracing, tracing-subscriber, metrics, metrics-exporter-prometheus, sqlx (SQLite), parquet and arrow, zstd, secrecy, zeroize, alloy (Hyperliquid and Aster EIP-712 signing), libloading (Lighter signer), governor (rate limits), proptest. Anything else needs approval.
+tokio, tokio-tungstenite and reqwest (both with rustls), serde, serde\_json, rust\_decimal, figment, clap, chrono, thiserror, anyhow, tracing, tracing-subscriber, metrics, metrics-exporter-prometheus, sqlx (SQLite), parquet and arrow, zstd, secrecy, zeroize, alloy (Hyperliquid and Aster EIP-712 signing), libloading (Lighter signer), governor (rate limits), proptest, futures-util (WebSocket stream/sink traits), tokio-rustls, rustls and rustls-native-certs (TLS setup and the TLS handshake timing in `latency-probe`). Anything else needs approval.
 
 The official `hyperliquid-rust-sdk`, Aster's published SDKs and community Lighter crates are references for message formats only, not dependencies: signing keys may only touch code reviewed in this repository.
 
@@ -255,7 +255,7 @@ Three triggers do the same thing: `spread-ctl kill`, creating the file `run/KILL
 - **HIP-3 deployer actions.** Deployers can change leverage or OI caps, delist, or settle a market at mark (Kinetiq announced settlement of TLT, IWM, USTECH and US500 this week). Metadata is polled; any such change moves affected pairs to Exiting.
 - **Outages and stuck withdrawals.** Stale feeds or failing REST mark a venue degraded; open positions stay and an alert fires. Hyperliquid had a 37-minute API outage in July 2025. Lighter withdrawals have stalled for hours during Arbitrum congestion, so Lighter legs carry lower leverage and the planner never relies on a Lighter withdrawal for urgent margin.
 - **Thin-market manipulation.** Long-tail assets on Hyperliquid have been squeezed on purpose (JELLY, POPCAT). The OI, listing-age and share-of-OI filters exist for this.
-- **Stablecoin basis.** Aster legs are USDT-quoted, some HIP-3 dexes margin in USDH or USDE, and USDH is being retired in favour of USDC. Each collateral asset's rate to USDC is a PnL line and a risk input.
+- **Stablecoin basis.** Aster legs margin in the contract's `marginAsset` (USDT, USDC, USD1 or U), some HIP-3 dexes margin in USDH or USDE, and USDH is being retired in favour of USDC. Each collateral asset's rate to USDC is a PnL line and a risk input.
 - **Custody and contracts.** Exposure caps per platform and an idle reserve in self-custody rather than on any venue. Funds in bridges are tracked as a separate balance until they land.
 
 ## Config, secrets, deployment, operations
@@ -341,7 +341,7 @@ The same strategy and risk code runs in all modes; only the venue implementation
 
 - Streams per venue: L2 book (top 20 levels), trades, BBO, predicted and settled funding, mark / index / oracle prices, open interest, metadata snapshots every 5 minutes.
 - Raw venue messages are stored exactly as received, with local receive timestamps, in zstd-compressed JSONL files split per venue and per UTC hour. This allows bit-exact replay through the adapters.
-- A nightly job derives Parquet tables (1-second BBO, funding history, book snapshots, OI) for analysis in Polars or Python.
+- A nightly job derives Parquet tables (1-second BBO, funding history, book snapshots, OI) for analysis in Polars or Python. Deferred to M1: M0 delivers the raw recordings only.
 
 ### Scanner (M1): does 10–20% exist at $100k?
 
@@ -352,7 +352,7 @@ The same strategy and risk code runs in all modes; only the venue implementation
 ### Backtester
 
 - Event-driven replay of raw recordings through the real adapters' parsers, the strategy and the risk crate.
-- Taker fills walk the recorded book at event time plus a per-venue latency: measured RTT from `latency-probe` plus protocol delays (for example Lighter Standard: 300 ms taker, 200 ms maker and cancel).
+- Taker fills walk the recorded book at event time plus a per-venue latency: measured RTT from `latency-probe` plus protocol delays (for example Lighter Standard: 300 ms taker, 0 ms maker, 300 ms cancel and modify).
 - Maker fills are conservative: a resting order fills only when recorded trades print through its price with cumulative volume at least equal to the estimated queue ahead of it.
 - Funding is applied at each venue's settlement times from recorded settled rates.
 - Same seed and same data give byte-identical results.
@@ -397,7 +397,7 @@ Telegram bot running on the server, three levels with de-duplication and rate li
 
 ### PnL attribution
 
-Per position and per day, split into: funding received and paid, trading fees, slippage against the decision mid, price PnL (should stay near zero), collateral basis (USDT, USDH, USDE against USDC). Points and airdrop accruals are tracked as quantities only, never as USD PnL.
+Per position and per day, split into: funding received and paid, trading fees, slippage against the decision mid, price PnL (should stay near zero), collateral basis (USDT, USD1, U, USDH, USDE against USDC). Points and airdrop accruals are tracked as quantities only, never as USD PnL.
 
 ### Accounting export
 
@@ -433,7 +433,7 @@ pub fn funding_apr(rate_per_interval: Decimal, interval_hours: Decimal) -> Decim
 | Milestone | Deliverables | Acceptance |
 | --- | --- | --- |
 | M0 | Workspace skeleton; market-data adapters for Hyperliquid core + HIP-3 dexes, Lighter, Aster; recorder; `latency-probe` | 72 h continuous recording from all venue families with under 0.1% gap time; latency report from at least 2 candidate hosts |
-| M1 | Scanner for S1 and S2 pairs, shadow portfolio, daily reports | 30-day report; go to M2 only if shadow ROC ≥ 10% annualised with shadow drawdown under 2% |
+| M1 | Parquet derivation of the M0 recordings; scanner for S1 and S2 pairs, shadow portfolio, daily reports | 30-day report; go to M2 only if shadow ROC ≥ 10% annualised with shadow drawdown under 2% |
 | M2 | Execution engine, risk crate, S5 maker-first tactic, paper mode for S1 and S2 | 14 days paper with zero unhandled order states; kill switch, venue-outage and HIP-3 delisting drills pass |
 | M3 | Live with $5k total on Hyperliquid (core + HIP-3) and Lighter, max 2 pairs | 14 days live; realised slippage within 30% of the paper model; no open CRIT incidents |
 | M4 | Aster live; capital ramp $25k → $50k → $100k; rebalance planner with unsigned payloads | Each step after 14 clean days; ROC and drawdown tracked against M1 |
@@ -443,3 +443,7 @@ pub fn funding_apr(rate_per_interval: Decimal, interval_hours: Decimal) -> Decim
 ## Sources
 
 As of 2026-10-29: [arb.sh perp DEX tracker](https://arb.sh/) · [HIP-3 builder-deployed perps](https://hyperliquid.gitbook.io/Hyperliquid-docs/hyperliquid-improvement-proposals-hips/hip-3-builder-deployed-perpetuals) · [Hyperliquid vaults for leaders](https://hyperliquid.gitbook.io/hyperliquid-docs/vaults/for-vault-leaders) · [Hyperliquid withdraw reference](https://docs.chainstack.com/reference/hyperliquid-exchange-withdraw) · [Hyperliquid node](https://github.com/hyperliquid-dex/node) · [Lighter trading fees](https://docs.lighter.xyz/trading) · [Lighter environments](https://apidocs.lighter.xyz/docs/environments) · [lighter-sdk crate](https://docs.rs/lighter-sdk) · [Aster API v3](https://asterdex.github.io/aster-api-website/futures-v3/general-info/) · [Glassnode Hyperliquid fill latency](https://latency.glassnode.com/hyperliquid/fill-latency) · [Zenlayer Tokyo latency](https://cloud.zenlayer.com/blog/crypto-trading-latency-tokyo) · [Pendle Boros docs](https://docs.pendle.finance/boros-docs/Introduction)
+
+## Revisions
+
+- 2026-10-31: Lighter Standard/Premium delays updated to the current Lighter docs (Standard has no maker delay; takers and cancels/modifies wait 300 ms). Aster collateral is per contract (USDT, USDC, USD1, U) instead of "USDT-quoted", as seen in live `exchangeInfo`. futures-util, tokio-rustls, rustls and rustls-native-certs added to the approved dependencies. Parquet derivation moved from M0 to M1. Details and sources are in `docs/venues/`.
