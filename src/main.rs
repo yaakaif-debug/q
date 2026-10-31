@@ -233,7 +233,15 @@ fn dump(path: &Path) -> anyhow::Result<()> {
     let mut out = std::io::BufWriter::new(std::io::stdout().lock());
     for line in reader.lines() {
         match line {
-            Ok(l) => writeln!(out, "{l}")?,
+            Ok(l) => {
+                if let Err(e) = writeln!(out, "{l}") {
+                    // `dump | head`: читатель закрыл канал — это не ошибка
+                    if e.kind() == std::io::ErrorKind::BrokenPipe {
+                        return Ok(());
+                    }
+                    return Err(e.into());
+                }
+            }
             Err(e) => {
                 // обрезанный хвост после аварии: всё прочитанное уже выведено
                 eprintln!("read stopped: {e}");
@@ -241,7 +249,10 @@ fn dump(path: &Path) -> anyhow::Result<()> {
             }
         }
     }
-    Ok(())
+    match out.flush() {
+        Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        other => Ok(other?),
+    }
 }
 
 fn collect_files(paths: &[PathBuf]) -> std::io::Result<Vec<PathBuf>> {

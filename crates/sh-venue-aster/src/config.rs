@@ -21,6 +21,8 @@ pub struct AsterConfig {
     /// Поток `@aggTrade` на каждый символ.
     pub subscribe_trades: bool,
     /// Общий поток `!bookTicker` (BBO всех символов в реальном времени).
+    /// По умолчанию выключен: около половины объёма записи Aster, а BBO с шагом
+    /// 100 мс уже есть в локальном стакане из `@depth@100ms`.
     pub subscribe_book_ticker: bool,
     /// Глубина REST-снимка для синхронизации стакана (5, 10, 20, 50, 100, 500, 1000).
     pub snapshot_depth: u32,
@@ -52,7 +54,7 @@ impl Default for AsterConfig {
             streams_per_connection: 180,
             subscribe_depth: true,
             subscribe_trades: true,
-            subscribe_book_ticker: true,
+            subscribe_book_ticker: false,
             snapshot_depth: 50,
             snapshot_concurrency: 4,
             rest_weight_per_minute: 1500,
@@ -106,6 +108,8 @@ mod tests {
     fn defaults_valid() {
         let c = AsterConfig::default();
         assert_eq!(c.validate(), Ok(()));
+        // поток глубины включён, общий BBO-поток выключен ради объёма записи
+        assert!(c.subscribe_depth && !c.subscribe_book_ticker);
         assert_eq!(c.snapshot_weight(), 2);
         assert!(AsterConfig { snapshot_depth: 30, ..c.clone() }.validate().is_err());
         assert!(AsterConfig { max_connection_age_secs: 86_400, ..c.clone() }.validate().is_err());
