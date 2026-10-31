@@ -1,0 +1,39 @@
+# Черновик unit-файла рекордера M0 (Ubuntu 24.04). Установка — см. README.md.
+[Unit]
+Description=spread-hunter market-data recorder (M0)
+Documentation=file:///opt/spread-hunter/README.md
+After=network-online.target chrony.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spreadhunter
+Group=spreadhunter
+WorkingDirectory=/opt/spread-hunter
+ExecStart=/opt/spread-hunter/bin/spread-hunter --config /opt/spread-hunter/config/default.toml run
+Restart=on-failure
+RestartSec=5
+# SIGTERM: адаптеры закрывают соединения, рекордер дописывает и закрывает файлы
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Environment=RUST_LOG=info
+# В M0 секретов нет; LoadCredentialEncrypted появится вместе с ключами (M2+).
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+ReadWritePaths=/opt/spread-hunter/data /opt/spread-hunter/run
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

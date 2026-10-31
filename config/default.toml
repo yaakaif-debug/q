@@ -1,0 +1,86 @@
+# Конфигурация M0: только запись рыночных данных. Неизвестные ключи — ошибка.
+# Наложение окружения: --overlay config/live.toml; переменные SH_<SECTION>__<KEY>.
+
+[engine]
+mode = "record"            # в M0 доступен только record
+
+[recorder]
+dir = "data/raw"           # data/raw/<venue>/<YYYY-MM-DD>/<venue>-<YYYY-MM-DD>T<HH>.jsonl.zst
+zstd_level = 3
+flush_interval_ms = 1000   # при аварии теряется не больше этого
+max_frame_bytes = 1048576
+fsync_interval_secs = 30
+channel_capacity = 65536
+
+[log]
+filter = "info"
+json_stdout = true
+dir = "data/logs"          # spread-hunter.<YYYY-MM-DD>.log, ротация по UTC
+
+[metrics]
+enabled = true
+listen = "127.0.0.1:9464"  # только loopback; снаружи — через WireGuard
+
+[network]
+proxy = "env"              # env | none | http://host:port (только для WebSocket; REST берёт HTTPS_PROXY сам)
+
+[venues.hyperliquid]
+enabled = true
+trading_enabled = false    # в M0 обязана быть false
+rest = "https://api.hyperliquid.xyz"
+ws = "wss://api.hyperliquid.xyz/ws"
+dexes = "auto"             # ядро + все HIP-3 дексы из perpDexs, обновление раз в час
+dex_denylist = []
+max_subscriptions = 950    # лимит площадки 1000 на IP
+subs_per_connection = 200
+subscribe_books = true
+subscribe_trades = true
+subscribe_bbo = false      # не хватает лимита подписок; BBO берётся из l2Book
+rest_weight_per_minute = 800
+ws_messages_per_minute = 1500
+ws_message_burst = 100
+metadata_refresh_secs = 300
+dex_discovery_secs = 3600
+predicted_funding_secs = 300
+settled_funding_secs = 3600
+settled_funding_lookback_hours = 6
+settled_funding_poll = true
+ping_secs = 20
+idle_timeout_secs = 45
+
+[venues.lighter]
+enabled = true
+trading_enabled = false
+rest = "https://mainnet.zklighter.elliot.ai"
+ws = "wss://mainnet.zklighter.elliot.ai/stream?readonly=true"
+subs_per_connection = 200
+max_subscriptions = 2000
+subscribe_books = true
+subscribe_trades = true
+subscribe_ticker = false
+rest_requests_per_minute = 40   # лимит Standard 60/мин на IP, включая открытие WS
+ws_messages_per_minute = 150    # лимит площадки 200/мин на IP
+ws_message_burst = 10           # лимит площадки: 50 сообщений «в полёте»
+metadata_refresh_secs = 300
+funding_backfill = true
+ping_secs = 30
+idle_timeout_secs = 60
+
+[venues.aster]
+enabled = true
+trading_enabled = false
+rest = "https://fapi.asterdex.com"
+ws = "wss://fstream.asterdex.com"
+streams_per_connection = 180    # лимит площадки 200
+subscribe_depth = true
+subscribe_trades = true
+subscribe_book_ticker = false   # ~половина объёма Aster; BBO есть в стакане из depth@100ms
+snapshot_depth = 50
+snapshot_concurrency = 4
+rest_weight_per_minute = 1500   # лимит площадки 2400/мин на IP
+metadata_refresh_secs = 300
+open_interest_secs = 300
+settled_funding_secs = 3600
+max_connection_age_secs = 84600 # 23.5 ч: площадка рвёт соединения через 24 ч
+ping_secs = 120
+idle_timeout_secs = 60

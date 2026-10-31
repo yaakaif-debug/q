@@ -1,0 +1,22 @@
+[package]
+name = "sh-store"
+description = "Raw market-data recorder (zstd JSONL per venue per UTC hour), reader and gap inspection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sh-core.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+zstd.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+
+[lints]
+workspace = true

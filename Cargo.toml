@@ -1,0 +1,116 @@
+[workspace]
+resolver = "3"
+members = [
+    ".",
+    "crates/sh-core",
+    "crates/sh-venue-api",
+    "crates/sh-venue-hyperliquid",
+    "crates/sh-venue-lighter",
+    "crates/sh-venue-aster",
+    "crates/sh-md",
+    "crates/sh-store",
+    "crates/sh-obs",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+sh-core = { path = "crates/sh-core" }
+sh-venue-api = { path = "crates/sh-venue-api" }
+sh-venue-hyperliquid = { path = "crates/sh-venue-hyperliquid" }
+sh-venue-lighter = { path = "crates/sh-venue-lighter" }
+sh-venue-aster = { path = "crates/sh-venue-aster" }
+sh-md = { path = "crates/sh-md" }
+sh-store = { path = "crates/sh-store" }
+sh-obs = { path = "crates/sh-obs" }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "http2"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+rust_decimal = { version = "1.43", features = ["serde", "macros"] }
+figment = { version = "0.10", features = ["toml", "env"] }
+clap = { version = "4", features = ["derive"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
+zstd = "0.14.3"
+governor = "0.10"
+proptest = "1"
+# Транзитивные зависимости одобренных крейтов, нужные напрямую (см. PR):
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tokio-rustls = { version = "0.26", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
+rustls-native-certs = "0.8"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+
+[package]
+name = "spread-hunter"
+description = "Delta-neutral spread engine (M0: recorder and latency probe)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "spread_hunter"
+path = "src/lib.rs"
+
+[[bin]]
+name = "spread-hunter"
+path = "src/main.rs"
+
+[[bin]]
+name = "latency-probe"
+path = "src/bin/latency-probe.rs"
+
+[dependencies]
+sh-core.workspace = true
+sh-venue-api.workspace = true
+sh-venue-hyperliquid.workspace = true
+sh-venue-lighter.workspace = true
+sh-venue-aster.workspace = true
+sh-store.workspace = true
+sh-obs.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+figment.workspace = true
+clap.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+zstd.workspace = true
+futures-util.workspace = true
+tokio-rustls.workspace = true
+rustls.workspace = true
+rustls-native-certs.workspace = true
+
+[lints]
+workspace = true
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
