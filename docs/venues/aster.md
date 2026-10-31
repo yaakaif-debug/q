@@ -1,87 +1,90 @@
-# Aster (futures v3) — market-data reference for M0
+# Aster (фьючерсы v3) — справка по рыночным данным для M0
 
-Scope: public market data only (no API wallet, no EIP-712, no signed endpoints).
-Checked on **2026-10-29** against the official docs and live
-`https://fapi.asterdex.com` responses fetched the same day. Unconfirmed items
-are marked **UNVERIFIED**.
+Область: только публичные рыночные данные (без API-кошелька, без EIP-712, без
+подписанных эндпоинтов). Проверено **2026-10-29** по официальной документации и
+живым ответам `https://fapi.asterdex.com` в тот же день. Неподтверждённое помечено
+**UNVERIFIED**.
 
-Primary source: [Futures API v3 (EN), GitHub `asterdex/api-docs`](https://github.com/asterdex/api-docs/blob/master/V3(Recommended)/EN/aster-finance-futures-api-v3.md)
-(rendered at [asterdex.github.io/aster-api-website/futures-v3/general-info](https://asterdex.github.io/aster-api-website/futures-v3/general-info/)).
-The protocol is Binance-USDⓈ-M-compatible in shape (`X-MBX-*` headers, `U/u/pu` depth ids).
+Основной источник: [Futures API v3 (EN), GitHub `asterdex/api-docs`](https://github.com/asterdex/api-docs/blob/master/V3(Recommended)/EN/aster-finance-futures-api-v3.md)
+(веб-версия: [asterdex.github.io/aster-api-website/futures-v3/general-info](https://asterdex.github.io/aster-api-website/futures-v3/general-info/)).
+По форме протокол совместим с Binance USDⓈ-M (заголовки `X-MBX-*`, идентификаторы
+глубины `U/u/pu`).
 
-## Endpoints
+## Эндпоинты
 
-| Item | Value |
+| Что | Значение |
 | --- | --- |
-| REST | `https://fapi.asterdex.com` (v3 paths `/fapi/v3/...`) |
-| WebSocket | `wss://fstream.asterdex.com` — raw `/ws/<stream>` or combined `/stream?streams=a/b/c` (combined wraps as `{"stream":..., "data":...}`) |
-| Testnet | `https://fapi.asterdex-testnet.com` (SPEC.md; not used in M0) |
+| REST | `https://fapi.asterdex.com` (пути v3 — `/fapi/v3/...`) |
+| WebSocket | `wss://fstream.asterdex.com` — одиночный поток `/ws/<stream>` или комбинированный `/stream?streams=a/b/c` (комбинированный оборачивает как `{"stream":..., "data":...}`) |
+| Тестнет | `https://fapi.asterdex-testnet.com` (из SPEC.md; в M0 не используется) |
 
-### REST used by M0
+### REST, который использует M0
 
-| Path | Weight | Use |
+| Путь | Вес | Назначение |
 | --- | --- | --- |
-| `GET /fapi/v3/exchangeInfo` | 1 | Symbols, filters, `rateLimits`. Per symbol: `symbol`, `status` (`TRADING` ...), `contractType` (`PERPETUAL`), `baseAsset`, `quoteAsset`, `marginAsset`, `onboardDate`, `filters` (`PRICE_FILTER.tickSize`, `LOT_SIZE.stepSize/minQty`, `MIN_NOTIONAL.notional` ...). `pricePrecision`/`quantityPrecision` must **not** be used as tick/step (docs). |
-| `GET /fapi/v3/fundingInfo` | 1 | Per symbol `fundingIntervalHours`, `interestRate`, `fundingFeeCap`, `fundingFeeFloor`. **The funding interval source.** |
+| `GET /fapi/v3/exchangeInfo` | 1 | Символы, фильтры, `rateLimits`. По символу: `symbol`, `status` (`TRADING` ...), `contractType` (`PERPETUAL`), `baseAsset`, `quoteAsset`, `marginAsset`, `onboardDate`, `filters` (`PRICE_FILTER.tickSize`, `LOT_SIZE.stepSize/minQty`, `MIN_NOTIONAL.notional` ...). `pricePrecision`/`quantityPrecision` **нельзя** использовать как тик/шаг (документация). |
+| `GET /fapi/v3/fundingInfo` | 1 | По символу: `fundingIntervalHours`, `interestRate`, `fundingFeeCap`, `fundingFeeFloor`. **Источник интервала фандинга.** |
 | `GET /fapi/v3/premiumIndex` | 1 | `markPrice`, `indexPrice`, `lastFundingRate`, `nextFundingTime`, `interestRate`, `time`. |
-| `GET /fapi/v3/fundingRate?symbol&startTime&endTime&limit` | 1 | Settled funding history `{symbol, fundingRate, fundingTime}`. |
-| `GET /fapi/v3/depth?symbol&limit` | 2 (≤50), 5 (100), 10 (500), 20 (1000) | Snapshot for local book resync (`lastUpdateId`, `E`, `T`, `bids`, `asks`). |
-| `GET /fapi/v1/openInterest?symbol` | **UNVERIFIED** | `{symbol, openInterest, time}`. Not in the v3 doc; works live on both `/fapi/v1` and `/fapi/v3` (2026-10-29). |
-| `GET /fapi/v3/time`, `/fapi/v3/ping` | 1 | Latency probe. |
+| `GET /fapi/v3/fundingRate?symbol&startTime&endTime&limit` | 1 | История расчётного фандинга `{symbol, fundingRate, fundingTime}`. |
+| `GET /fapi/v3/depth?symbol&limit` | 2 (≤50), 5 (100), 10 (500), 20 (1000) | Снимок для синхронизации локального стакана (`lastUpdateId`, `E`, `T`, `bids`, `asks`). |
+| `GET /fapi/v1/openInterest?symbol` | **UNVERIFIED** | `{symbol, openInterest, time}`. В документации v3 нет; вживую работает и на `/fapi/v1`, и на `/fapi/v3` (2026-10-29). |
+| `GET /fapi/v3/time`, `/fapi/v3/ping` | 1 | Замер задержки. |
 
-Live check 2026-10-29: `exchangeInfo` lists 644 symbols, 602 with `status=TRADING`.
-`marginAsset` values seen: `USDT`, `USDC`, `USD1`, `U` — **not every contract is
-USDT-margined**, contrary to the SPEC.md venue table. Collateral is taken from
-`marginAsset` per symbol.
+Живая проверка 2026-10-29: `exchangeInfo` содержит 644 символа, 602 со статусом
+`TRADING`. Встреченные значения `marginAsset`: `USDT`, `USDC`, `USD1`, `U` —
+**не все контракты маржинальны в USDT**. Обеспечение берётся из `marginAsset`
+каждого символа; SPEC.md исправлен соответственно.
 
-## WebSocket streams used by M0
+## Потоки WebSocket, которые использует M0
 
-Source: "Websocket Market Streams" section of the v3 doc.
+Источник: раздел «Websocket Market Streams» документации v3.
 
-| Stream | Payload | Notes |
+| Поток | Данные | Примечания |
 | --- | --- | --- |
-| `<symbol>@depth@100ms` | `depthUpdate {E, T, s, U, u, pu, b[[px,qty]], a[[px,qty]]}` | Diff depth. Quantities are absolute; 0 removes. |
-| `<symbol>@aggTrade` | `aggTrade {E, s, a, p, q, f, l, T, m}` | `m = true` → buyer is maker → sell aggressor. |
-| `!markPrice@arr@1s` | `[markPriceUpdate {E, s, p (mark), i (index), P, r (funding rate), T (next funding time)}]` | All symbols, 1 s. Predicted funding + mark + index. |
-| `!bookTicker` | `bookTicker {u, E, T, s, b, B, a, A}` | All-symbol BBO, real time. |
+| `<symbol>@depth@100ms` | `depthUpdate {E, T, s, U, u, pu, b[[px,qty]], a[[px,qty]]}` | Дельты глубины. Количества абсолютные; 0 удаляет уровень. Включено по умолчанию. |
+| `<symbol>@aggTrade` | `aggTrade {E, s, a, p, q, f, l, T, m}` | `m = true` → покупатель — мейкер → агрессор продавал. |
+| `!markPrice@arr@1s` | `[markPriceUpdate {E, s, p (mark), i (индекс), P, r (ставка фандинга), T (время следующего расчёта)}]` | Все символы, раз в 1 с. Прогнозный фандинг, mark и индекс. |
+| `!bookTicker` | `bookTicker {u, E, T, s, b, B, a, A}` | BBO всех символов в реальном времени. **По умолчанию выключен** (`subscribe_book_ticker = false`): это около половины объёма записи Aster, а BBO с шагом 100 мс уже есть в локальном стакане из `@depth@100ms`. |
 
-Local book procedure (docs "How to manage a local order book correctly"):
-buffer stream events → GET `/fapi/v3/depth` → drop events with `u < lastUpdateId`
-→ first applied event must satisfy `U <= lastUpdateId <= u` → afterwards each
-event's `pu` must equal the previous event's `u`, otherwise resync from a new
-snapshot.
+Процедура локального стакана (документация, «How to manage a local order book
+correctly»): буферизовать события потока → GET `/fapi/v3/depth` → отбросить события
+с `u < lastUpdateId` → первое применяемое событие должно удовлетворять
+`U <= lastUpdateId <= u` → далее `pu` каждого события равен `u` предыдущего,
+иначе заново синхронизироваться по новому снимку. Непрерывность цепочки `pu`
+проверена вживую.
 
-Connection rules: one connection lives at most **24 h**; server sends a ping frame
-every 5 minutes and drops the connection if no pong within 15 minutes; at most
-**10 incoming client messages per second** per connection; at most **200 streams
-per connection**. Symbols in stream names are lowercase.
+Правила соединений: одно соединение живёт не дольше **24 ч**; сервер шлёт кадр ping
+каждые 5 минут и разрывает соединение, если 15 минут нет pong; не более
+**10 входящих клиентских сообщений в секунду** на соединение; не более **200
+потоков на соединение**. Символы в именах потоков — в нижнем регистре.
 
-M0 subscribes through the combined-stream URL (no SUBSCRIBE messages), at most
-`streams_per_connection` (default 180) per connection, and reconnects every
-connection before the 24 h mark (`max_connection_age`, default 23 h 30 m).
-The maximum number of connections per IP is **UNVERIFIED** (not documented).
+M0 подписывается через URL комбинированного потока (без сообщений SUBSCRIBE), не
+более `streams_per_connection` (по умолчанию 180) потоков на соединение, и
+переподключает каждое соединение до отметки 24 ч (`max_connection_age_secs`, по
+умолчанию 23 ч 30 мин, со сдвигом между соединениями). Максимальное число
+соединений на IP — **UNVERIFIED** (не документировано).
 
-## Rate limits
+## Лимиты
 
-- `exchangeInfo.rateLimits` (live 2026-10-29): `REQUEST_WEIGHT` 2400 / minute, `ORDERS` 1200 / minute and 300 / 10 s. Limits are per IP. 429 → back off; repeated → 418 IP ban (2 minutes to 3 days). `X-MBX-USED-WEIGHT-1M` header reports usage.
-- M0 runs all Aster REST calls through one weight limiter (default 1200 / minute, half of the published limit).
+- `exchangeInfo.rateLimits` (вживую 2026-10-29): `REQUEST_WEIGHT` 2400 в минуту, `ORDERS` 1200 в минуту и 300 за 10 с. Лимиты действуют на IP. 429 → отступить; повторы → бан IP 418 (от 2 минут до 3 суток). Заголовок `X-MBX-USED-WEIGHT-1M` показывает расход.
+- M0 пропускает все REST-запросы Aster через один весовой лимитер (по умолчанию 1500 в минуту, ~60% опубликованного лимита).
 
-## Tick size, lot size, fees, funding interval — where they come from
+## Тик, лот, комиссии, интервал фандинга — откуда берутся
 
-- **Tick**: `PRICE_FILTER.tickSize`; **lot**: `LOT_SIZE.stepSize`, `minQty`; **min notional**: `MIN_NOTIONAL.notional`.
-- **Funding interval**: `fundingInfo.fundingIntervalHours` per symbol (live values include 4 and 8).
-- **Predicted funding**: `markPriceUpdate.r` / `premiumIndex.lastFundingRate` (fraction per interval). Despite the name it is the in-progress (predicted) rate: live 2026-10-29 BTCUSDT showed `lastFundingRate = 0.00005371` (same as `r`) while the last three settled `fundingRate` entries were `0.0001`. Settled values come from `fundingRate` history.
-- **Fees**: only via `GET /fapi/v3/commissionRate` (USER_DATA, signed) → not available in M0. SPEC.md's 0% / 0.04% is not taken from metadata and is not used. Flagged for M1.
-- **Collateral**: `marginAsset` per symbol.
+- **Тик**: `PRICE_FILTER.tickSize`; **лот**: `LOT_SIZE.stepSize`, `minQty`; **минимальный номинал**: `MIN_NOTIONAL.notional`.
+- **Интервал фандинга**: `fundingInfo.fundingIntervalHours` по символу (вживую встречаются 4 и 8).
+- **Прогнозный фандинг**: `markPriceUpdate.r` / `premiumIndex.lastFundingRate` (доля за интервал). Несмотря на имя, это текущий (прогнозный) показатель: вживую 2026-10-29 у BTCUSDT `lastFundingRate = 0.00005371` (как и `r`), а три последних расчёта в `fundingRate` были `0.0001`. Расчётные значения берутся из истории `fundingRate`.
+- **Комиссии**: только через `GET /fapi/v3/commissionRate` (USER_DATA, подписанный запрос) → в M0 недоступны. 0% / 0,04% из SPEC.md не берутся из метаданных и не используются. Вопрос для M1.
+- **Обеспечение**: `marginAsset` по символу (USDT, USDC, USD1, U).
 
-## Keys and permissions
+## Ключи и права
 
-Not touched in M0. Per the docs' README (2026-10-29): since 2026-09-01 all
-authenticated v3 endpoints require the main wallet to have made a deposit;
-public market data is unaffected.
+В M0 не затрагиваются. По README документации (2026-10-29): с 2026-09-01 все
+авторизованные эндпоинты v3 требуют, чтобы основной кошелёк сделал депозит;
+публичные рыночные данные это не затрагивает.
 
-## Open points (UNVERIFIED)
+## Открытые вопросы (UNVERIFIED)
 
-- Weight of `openInterest`.
-- Max WebSocket connections per IP.
-- Whether `@depth@100ms` is available for every symbol (docs: "100 ms (if existing)").
+- Вес `openInterest`.
+- Максимум соединений WebSocket на IP.
+- Доступен ли `@depth@100ms` для всех символов (документация: «100 ms (if existing)»).

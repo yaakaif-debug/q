@@ -1,107 +1,157 @@
 # spread-hunter
 
-Rust daemon for delta-neutral funding and price spreads between perp DEXes.
-The full specification is in [SPEC.md](SPEC.md); venue API notes are in
+Демон на Rust для дельта-нейтральных спредов по фандингу и цене между perp-DEX.
+Полная спецификация — в [SPEC.md](SPEC.md); заметки по API площадок — в
 [docs/venues/](docs/venues/).
 
-**Current milestone: M0** — market-data recording only. There is no signing,
-no private endpoint and no order code anywhere in the repository.
+**Текущий этап: M0** — только запись рыночных данных. В репозитории нет подписей,
+приватных эндпоинтов и кода ордеров.
 
-## What M0 contains
+## Что входит в M0
 
-| Crate | Contents |
+| Крейт | Содержимое |
 | --- | --- |
-| `sh-core` | `Px`/`Qty`/`Usd`/`Bps` decimal newtypes, `VenueKey (exchange, dex)`, collateral enum, `Clock` (wall + monotonic), raw record and sys event types |
-| `sh-venue-api` | `MarketDataVenue` trait, normalised events, instrument metadata, funding-interval inference, shared WebSocket driver (reconnect/backoff, pings, idle timeout, rate-limited writer), REST client with weight limiter, subscription planner |
-| `sh-venue-hyperliquid` | Core + every HIP-3 dex (discovered via `perpDexs` at startup and hourly) |
-| `sh-venue-lighter` | Read-only WebSocket, nonce-checked books, resubscribe on gap |
-| `sh-venue-aster` | Futures v3 combined streams, diff-depth books with REST snapshot resync |
-| `sh-md` | Order book, sequence-gap detection with buffering and snapshot resync, BBO, depth walk, staleness |
-| `sh-store` | Raw recorder (zstd JSONL per venue per UTC hour), reader, gap report |
-| `sh-obs` | JSON logs (stdout + daily file), Prometheus exporter on `127.0.0.1:9464` |
+| `sh-core` | Десятичные новые типы `Px`/`Qty`/`Usd`/`Bps`, `VenueKey (exchange, dex)`, перечисление обеспечения, `Clock` (настенное и монотонное время), типы сырых записей и системных событий |
+| `sh-venue-api` | Трейт `MarketDataVenue`, нормализованные события, метаданные инструментов, вывод интервала фандинга, общий драйвер WebSocket (переподключение с задержкой, пинги, тайм-аут тишины, писатель с лимитом сообщений), REST-клиент с весовым лимитером, планировщик подписок |
+| `sh-venue-hyperliquid` | Ядро и все HIP-3 дексы (обнаружение через `perpDexs` при старте и каждый час) |
+| `sh-venue-lighter` | WebSocket только для чтения, стаканы с проверкой `nonce`, переподписка при разрыве |
+| `sh-venue-aster` | Комбинированные потоки futures v3, стаканы по дельтам с синхронизацией через REST-снимок |
+| `sh-md` | Стакан, обнаружение разрывов последовательности с буферизацией и пересинхронизацией по снимку, BBO, проход по глубине, устаревание |
+| `sh-store` | Сырой рекордер (zstd JSONL по площадке и часу UTC), чтение, отчёт о разрывах |
+| `sh-obs` | JSON-логи (stdout и ежедневный файл), экспорт Prometheus на `127.0.0.1:9464` |
 
-Binaries: `spread-hunter` (`run`, `metadata`, `inspect`, `dump`) and `latency-probe`.
+Бинарники: `spread-hunter` (`run`, `metadata`, `inspect`, `dump`) и `latency-probe`.
 
-## Build and test
+## Сборка и проверки
 
 ```bash
 cargo build --release
+```
+
+```bash
 cargo fmt --all -- --check
+```
+
+```bash
 cargo clippy --workspace --all-targets -- -D warnings
+```
+
+```bash
 cargo test --workspace
 ```
 
-The toolchain is pinned in `rust-toolchain.toml`.
+Версия тулчейна закреплена в `rust-toolchain.toml`.
 
-## Recorder
+## Рекордер
 
 ```bash
 ./target/release/spread-hunter --config config/default.toml run
 ```
 
-Files: `data/raw/<venue>/<YYYY-MM-DD>/<venue>-<YYYY-MM-DD>T<HH>.jsonl.zst`.
-Each file is a sequence of independent zstd frames (flushed every second), so
-a crash loses at most `flush_interval_ms` of data and earlier frames stay
-readable. Every line is one JSON object:
+Файлы: `data/raw/<venue>/<YYYY-MM-DD>/<venue>-<YYYY-MM-DD>T<HH>.jsonl.zst`.
+Каждый файл — последовательность независимых кадров zstd (сбрасываются раз в
+секунду), поэтому при аварии теряется не больше `flush_interval_ms`, а уже
+записанные кадры читаются. Каждая строка — один объект JSON:
 
-- header (first line after each open): `{"hdr":{"format":"sh-raw-v1","session":...,"host":...,"session_start_wall_ns":...,"version":...}}`
-- record: `{"exchange":"lighter","src":"ws|rest|sys|out","ep":"<rest request>","conn":"lt-ws-0","recv":{"wall_ns":...,"mono_ns":...},"payload":"<message exactly as received>"}`
+- заголовок (первая строка после каждого открытия файла): `{"hdr":{"format":"sh-raw-v1","session":...,"host":...,"session_start_wall_ns":...,"version":...}}`
+- запись: `{"exchange":"lighter","src":"ws|rest|sys|out","ep":"<REST-запрос>","conn":"lt-ws-0","recv":{"wall_ns":...,"mono_ns":...},"payload":"<сообщение ровно как пришло>"}`
 
-`payload` is the venue message byte-for-byte. `mono_ns` is monotonic time since
-the session start and is comparable only within one `session`. `src=out`
-records the subscription messages we sent; `src=sys` records connection and
-book-sync events (`conn_up`, `conn_down`, `book_gap`, `book_synced`, ...).
+`payload` — сообщение площадки байт в байт. `mono_ns` — монотонное время от старта
+сессии, сравнимо только внутри одной `session`. `src=out` — отправленные нами
+сообщения подписки; `src=sys` — события соединений и синхронизации стаканов
+(`conn_up`, `conn_down`, `book_gap`, `book_synced`, ...).
 
-Inspect and decompress:
+Проверка и распаковка:
 
 ```bash
 ./target/release/spread-hunter inspect data/raw
+```
+
+```bash
 ./target/release/spread-hunter dump data/raw/lighter/2026-10-29/lighter-2026-10-29T06.jsonl.zst | head
 ```
 
-`inspect` reports, per venue, connection downtime and book-desync time as a
-fraction of the recorded span (the M0 acceptance metric is < 0.1%), plus the
-longest silence between records (recorder downtime).
+`inspect` показывает по каждой площадке время без соединения и время
+рассинхронизации стаканов как долю записанного периода (критерий приёмки M0 —
+меньше 0,1%), а также самую длинную паузу между записями (простой рекордера).
 
-Disk usage measured on 2026-10-29 with the default config: about 1.4 GB per
-hour compressed (Aster ~1.05 GB/h, Lighter ~0.24 GB/h, Hyperliquid ~0.1 GB/h),
-i.e. about 100 GB for the 72-hour acceptance run. `venues.aster.subscribe_book_ticker = false`
-roughly halves the Aster share.
+Объём на диске с конфигом по умолчанию (замер 2026-10-31): около 0,94 ГБ в час в
+сжатом виде (Aster ~0,66 ГБ/ч, Lighter ~0,17 ГБ/ч, Hyperliquid ~0,10 ГБ/ч), то есть
+около 70 ГБ на 72-часовой прогон приёмки. Общий поток BBO Aster `!bookTicker`
+выключен по умолчанию (`venues.aster.subscribe_book_ticker = false`); с ним Aster
+пишет ~1,05 ГБ/ч, а всего выходит ~1,4 ГБ/ч.
 
-## Latency probe
+## Замер задержек
 
 ```bash
 ./target/release/latency-probe --samples 50
 ```
 
-Measures DNS, TCP connect, TLS handshake, WebSocket ping RTT and REST
-time-to-first-byte per venue, prints p50/p90/p99 and writes
-`data/latency/<host>-<date>.json`. Order-ack RTT (`--allow-test-orders`) is not
-part of M0. If an HTTPS proxy is configured the result is marked `via_proxy`
-and the TCP/TLS numbers describe the proxy path.
+Измеряет по каждой площадке DNS, TCP connect, TLS handshake, RTT пинга WebSocket и
+время до первого байта REST, печатает p50/p90/p99 и пишет
+`data/latency/<host>-<date>.json`. Замер подтверждения ордера
+(`--allow-test-orders`) в M0 не входит. Если настроен HTTPS-прокси, результат
+помечается `via_proxy`, и цифры TCP/TLS относятся к пути через прокси.
 
-## Deploying the recorder on Ubuntu 24.04
+## Запуск рекордера на Ubuntu 24.04
 
 ```bash
 sudo apt-get install -y build-essential cmake chrony
+```
+
+```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+```
+
+```bash
 cargo build --release
+```
+
+```bash
 sudo useradd --system --home /opt/spread-hunter --shell /usr/sbin/nologin spreadhunter
+```
+
+```bash
 sudo mkdir -p /opt/spread-hunter/{bin,config,data,run}
+```
+
+```bash
 sudo cp target/release/spread-hunter target/release/latency-probe /opt/spread-hunter/bin/
+```
+
+```bash
 sudo cp config/default.toml /opt/spread-hunter/config/
+```
+
+```bash
 sudo chown -R spreadhunter:spreadhunter /opt/spread-hunter/data /opt/spread-hunter/run
+```
+
+```bash
 sudo cp ops/systemd/spread-hunter-recorder.service /etc/systemd/system/
+```
+
+```bash
 sudo systemctl daemon-reload
+```
+
+```bash
 sudo systemctl enable --now spread-hunter-recorder
+```
+
+```bash
 journalctl -u spread-hunter-recorder -f
 ```
 
-Paths in `config/default.toml` are relative (`data/raw`, `data/logs`); the unit
-sets `WorkingDirectory=/opt/spread-hunter`, so they resolve under
-`/opt/spread-hunter/data`. Metrics: `curl -s 127.0.0.1:9464/metrics`.
+Пути в `config/default.toml` относительные (`data/raw`, `data/logs`); unit-файл
+задаёт `WorkingDirectory=/opt/spread-hunter`, поэтому они указывают в
+`/opt/spread-hunter/data`. Метрики:
 
-Outbound access needed: `api.hyperliquid.xyz`, `mainnet.zklighter.elliot.ai`,
-`fapi.asterdex.com`, `fstream.asterdex.com` (all TCP 443). Lighter rejects
-WebSocket handshakes from restricted jurisdictions unless `?readonly=true` is
-used; the default URL already uses it (read-only is all M0 needs).
+```bash
+curl -s 127.0.0.1:9464/metrics
+```
+
+Нужен исходящий доступ к `api.hyperliquid.xyz`, `mainnet.zklighter.elliot.ai`,
+`fapi.asterdex.com`, `fstream.asterdex.com` (TCP 443). Lighter отклоняет
+рукопожатие WebSocket из ограниченных юрисдикций без `?readonly=true`; URL по
+умолчанию уже его содержит (для M0 нужен только режим чтения).

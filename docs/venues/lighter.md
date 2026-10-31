@@ -1,94 +1,96 @@
-# Lighter — market-data reference for M0
+# Lighter — справка по рыночным данным для M0
 
-Scope: public market data only (no signer, no `sendTx`, no auth tokens).
-Checked on **2026-10-29** against the official docs at `docs.lighter.xyz`
-(the spec's `apidocs.lighter.xyz/docs/environments` now redirects there) and
-against live mainnet responses fetched the same day. Unconfirmed items are
-marked **UNVERIFIED**.
+Область: только публичные рыночные данные (без подписанта, без `sendTx`, без
+токенов авторизации). Проверено **2026-10-29** по официальной документации
+`docs.lighter.xyz` (указанный в SPEC.md адрес `apidocs.lighter.xyz/docs/environments`
+теперь перенаправляет туда) и по живым ответам mainnet в тот же день.
+Неподтверждённое помечено **UNVERIFIED**.
 
-## Endpoints
+## Эндпоинты
 
-| Item | Value | Source |
+| Что | Значение | Источник |
 | --- | --- | --- |
 | REST | `https://mainnet.zklighter.elliot.ai/api/v1/` | [Environments](https://docs.lighter.xyz/developers/getting-started/environments) |
-| WebSocket | `wss://mainnet.zklighter.elliot.ai/stream` (read-only variant for restricted regions: `?readonly=true`) | same |
-| Testnet | REST `https://testnet.zklighter.elliot.ai`, WS `.../stream`, chain id 300 | same |
-| Mainnet chain id | 304 (signing only; unused in M0) | same |
+| WebSocket | `wss://mainnet.zklighter.elliot.ai/stream` (вариант только для чтения для ограниченных регионов: `?readonly=true`) | там же |
+| Тестнет | REST `https://testnet.zklighter.elliot.ai`, WS `.../stream`, chain id 300 | там же |
+| Chain id mainnet | 304 (только для подписи; в M0 не используется) | там же |
 
-Colocation hint from the docs: AWS Tokyo `ap-northeast-1`, AZ `apne1-az4`.
-Traffic goes through AWS CloudFront.
+Подсказка по размещению из документации: AWS Tokyo `ap-northeast-1`, AZ `apne1-az4`.
+Трафик идёт через AWS CloudFront.
 
-Verified 2026-10-29 from a US egress: `wss://.../stream` (without `readonly`)
-fails the handshake with HTTP 400 and `{"code":20558,"message":"You are accessing
-Lighter from a restricted jurisdiction..."}`; `?readonly=true` works. REST market
-data endpoints answer normally. The adapter uses `?readonly=true` by default.
+Проверено 2026-10-29 с выходом в сеть из США: `wss://.../stream` (без `readonly`)
+отклоняет рукопожатие с HTTP 400 и `{"code":20558,"message":"You are accessing
+Lighter from a restricted jurisdiction..."}`; `?readonly=true` работает. REST-эндпоинты
+рыночных данных отвечают нормально. Адаптер по умолчанию использует `?readonly=true`.
 
-### REST used by M0
+### REST, который использует M0
 
-| Path | Use | Notes |
+| Путь | Назначение | Примечания |
 | --- | --- | --- |
-| `GET /api/v1/orderBookDetails?filter=perp` | Market metadata | `order_book_details[]`: `symbol`, `market_id`, `status` (`active`/`inactive`), `taker_fee`, `maker_fee` (percent strings, market base rate), `min_base_amount`, `min_quote_amount`, `size_decimals`, `price_decimals`, `supported_*_decimals`, `default/min_initial_margin_fraction`, `maintenance_margin_fraction`, `funding_clamp_small`, `funding_clamp_big`, `base_interest_rate`, `funding_premium_multiplier`, `mark_price`, `index_price`, `open_interest` (single-sided, base), `open_interest_usd`, `market_config.{market_margin_mode, force_reduce_only, trading_hours, hidden}`, `created_at` (ms string). [orderBookDetails](https://docs.lighter.xyz/api/orders/orderbookdetails) |
-| `GET /api/v1/fundings?market_id&resolution=1h&start_timestamp&end_timestamp&count_back` | Settled funding history | `fundings[] {timestamp (s), value, rate, direction}`. [fundings](https://docs.lighter.xyz/api/funding/fundings) |
-| `GET /` | Status `{status, network_id, timestamp}` | [status](https://docs.lighter.xyz/api/system/status). Note: `/api/v1/status` returns 403 from CloudFront. |
+| `GET /api/v1/orderBookDetails?filter=perp` | Метаданные рынков | `order_book_details[]`: `symbol`, `market_id`, `status` (`active`/`inactive`), `taker_fee`, `maker_fee` (строки в процентах, базовая ставка рынка), `min_base_amount`, `min_quote_amount`, `size_decimals`, `price_decimals`, `supported_*_decimals`, `default/min_initial_margin_fraction`, `maintenance_margin_fraction`, `funding_clamp_small`, `funding_clamp_big`, `base_interest_rate`, `funding_premium_multiplier`, `mark_price`, `index_price`, `open_interest` (одна сторона, в базовом активе), `open_interest_usd`, `market_config.{market_margin_mode, force_reduce_only, trading_hours, hidden}`, `created_at` (мс, строкой). [orderBookDetails](https://docs.lighter.xyz/api/orders/orderbookdetails) |
+| `GET /api/v1/fundings?market_id&resolution=1h&start_timestamp&end_timestamp&count_back` | История расчётного фандинга | `fundings[] {timestamp (с), value, rate, direction}`. [fundings](https://docs.lighter.xyz/api/funding/fundings) |
+| `GET /` | Статус `{status, network_id, timestamp}` | [status](https://docs.lighter.xyz/api/system/status). `/api/v1/status` отвечает 403 от CloudFront. |
 
-Live check 2026-10-29: 241 perp markets, 213 `active`.
+Живая проверка 2026-10-29: 241 perp-рынок, 213 со статусом `active`.
 
-## WebSocket channels used by M0
+## Каналы WebSocket, которые использует M0
 
-Envelope: `type: "connected"`, `type: "subscribed/<channel>"` (snapshot),
-`type: "update/<channel>"`, errors as `{error:{code,message}}`. Subscribe with
-`{"type":"subscribe","channel":"order_book/0"}`; response `channel` uses a colon:
-`order_book:0`. Source: [WebSocket](https://docs.lighter.xyz/api/websocket).
+Конверт: `type: "connected"`, `type: "subscribed/<channel>"` (снимок),
+`type: "update/<channel>"`, ошибки — `{error:{code,message}}`. Подписка:
+`{"type":"subscribe","channel":"order_book/0"}`; в ответе `channel` через двоеточие:
+`order_book:0`. Источник: [WebSocket](https://docs.lighter.xyz/api/websocket).
 
-| Channel | Payload | Sequencing |
+| Канал | Данные | Последовательность |
 | --- | --- | --- |
-| `order_book/{market_id}` | `order_book {asks[], bids[] of {price,size}, offset, nonce, begin_nonce, last_updated_at}`, envelope `timestamp` (ms) | Snapshot on subscribe, then deltas every 50 ms; `size` is the new total, `"0"` removes. **Continuity: `begin_nonce` of an update must equal `nonce` of the previous message.** `offset` is per API server and may jump on reconnect — do not use it. On a gap: unsubscribe + subscribe for a fresh snapshot ([Market data guide](https://docs.lighter.xyz/developers/integration-guides/market-data)). |
-| `trade/{market_id}` | `{trades[], liquidation_trades[], nonce}`; `Trade {trade_id, type, market_id, size, price, usd_amount, is_maker_ask, timestamp (ms), transaction_time (µs), ...}` | No sequence check needed (trades are not state). Aggressor side: `is_maker_ask == true` → maker was the ask → buy aggressor. **UNVERIFIED** (inferred from the field name). |
-| `market_stats/all` | `market_stats {symbol, market_id, index_price, mark_price, mid_price, open_interest, current_funding_rate, funding_rate, funding_timestamp, ...}` | `current_funding_rate` = estimate of the upcoming payment; `funding_rate` = last settled at `funding_timestamp`. |
-| `ticker/{market_id}` | BBO `{s, a{price,size}, b{price,size}}` + `nonce` | Per nonce. Off by default in M0 (BBO derives from `order_book`; saves client messages). |
+| `order_book/{market_id}` | `order_book {asks[], bids[] из {price,size}, offset, nonce, begin_nonce, last_updated_at}`, `timestamp` конверта (мс) | Снимок при подписке, затем дельты каждые 50 мс; `size` — новый итог уровня, `"0"` удаляет уровень. **Непрерывность: `begin_nonce` обновления равен `nonce` предыдущего сообщения** (проверено вживую). `offset` относится к серверу API и может прыгнуть при переподключении — его не используем. При разрыве: отписка и повторная подписка ради нового снимка ([Market data guide](https://docs.lighter.xyz/developers/integration-guides/market-data)). |
+| `trade/{market_id}` | `{trades[], liquidation_trades[], nonce}`; `Trade {trade_id, type, market_id, size, price, usd_amount, is_maker_ask, timestamp (мс), transaction_time (мкс), ...}` | Проверка последовательности не нужна (сделки — не состояние). Сторона агрессора: `is_maker_ask == true` → мейкер стоял на ask → агрессор покупал. **UNVERIFIED** (вывод из имени поля). |
+| `market_stats/all` | `market_stats {symbol, market_id, index_price, mark_price, mid_price, open_interest, current_funding_rate, funding_rate, funding_timestamp, ...}` | `current_funding_rate` — оценка ближайшего платежа; `funding_rate` — последний расчёт в момент `funding_timestamp`. |
+| `ticker/{market_id}` | BBO `{s, a{price,size}, b{price,size}}` + `nonce` | На каждый `nonce`. В M0 по умолчанию выключен (BBO берётся из `order_book`; экономит клиентские сообщения). |
 
-Payload of `market_stats/all` is a map keyed by market id (verified live
-2026-10-29; the docs show only the single-market form; the adapter accepts both).
-Live quirks handled by the parser: `mid_price` is `""` when a book is one-sided
-(each map entry is parsed separately, so one bad market never drops the rest);
-`open_interest` here is single-sided **USD** (`open_interest_usd = 2 *
-open_interest`), unlike `orderBookDetails.open_interest`, which is in base tokens.
+`market_stats/all` присылает словарь по `market_id` (проверено вживую 2026-10-29;
+документация показывает только форму для одного рынка; адаптер понимает обе).
+Особенности живых данных, которые учитывает разбор: `mid_price` бывает `""` при
+одностороннем стакане (каждый элемент словаря разбирается отдельно, поэтому один
+плохой рынок не теряет остальные); `open_interest` здесь — одна сторона **в USD**
+(`open_interest_usd = 2 * open_interest`), в отличие от
+`orderBookDetails.open_interest`, который в базовом активе.
 
-Timestamps ([Timestamps](https://docs.lighter.xyz/developers/reference/timestamps)):
-envelope `timestamp` ms (API server), `Trade.timestamp` ms (block), `transaction_time`
-and book `last_updated_at` µs. `fundings[].timestamp` is in **seconds** (live).
+Метки времени ([Timestamps](https://docs.lighter.xyz/developers/reference/timestamps)):
+`timestamp` конверта — мс (сервер API), `Trade.timestamp` — мс (блок), `transaction_time`
+и `last_updated_at` стакана — мкс. `fundings[].timestamp` — **секунды** (живая проверка).
 
-Keepalive: client must send a frame at least every 2 minutes; `{"type":"ping"}` →
-`{"type":"pong"}`. `permessage-deflate` supported. Slow clients are dropped after
-250 ms write timeouts.
+Поддержание соединения: клиент обязан присылать кадр хотя бы раз в 2 минуты;
+`{"type":"ping"}` → `{"type":"pong"}`. Поддерживается `permessage-deflate`. Медленных
+клиентов отключают после тайм-аутов записи 250 мс.
 
-## Rate limits
+## Лимиты
 
-Source: [Rate limits](https://docs.lighter.xyz/developers/reference/rate-limits).
+Источник: [Rate limits](https://docs.lighter.xyz/developers/reference/rate-limits).
 
-- REST, Standard / unauthenticated: **60 requests per rolling minute** per IP. Opening `/stream` counts against it (weight 90 for weighted tiers).
-- WebSocket per IP: 255 connections, 500 subscriptions per connection, 5000 per IP, **200 client messages per minute**, 50 in-flight.
-- Exceeding: HTTP 429 (or 405); WS disconnection. Firewall cooldown 60 s.
+- REST, Standard / без авторизации: **60 запросов в скользящую минуту** на IP. Открытие `/stream` тоже считается (вес 90 для весовых уровней).
+- WebSocket на IP: 255 соединений, 500 подписок на соединение, 5000 на IP, **200 клиентских сообщений в минуту**, 50 сообщений «в полёте».
+- При превышении: HTTP 429 (или 405); разрыв WS. Остывание после файрвола — 60 с.
 
-Consequence for M0: subscribing `order_book` + `trade` for ~213 markets is ~430
-client messages, i.e. at least ~2.2 minutes of subscribing under the 200/min cap.
-The adapter sends all Lighter client messages (subscribe, resync, ping) through one
-shared limiter (default 150 / minute, burst 10). A burst of ~150 subscribe
-messages produced `{"error":{"code":30010,"message":"Too Many Inflight Messages!"}}`
-and a connection reset on 2026-10-29 — hence the small burst.
+Следствие для M0: подписка `order_book` + `trade` на ~213 рынков — около 430
+клиентских сообщений, то есть не меньше ~2,2 минуты подписки при лимите 200/мин.
+Адаптер отправляет все клиентские сообщения Lighter (подписки, пересинхронизация,
+пинги) через один общий лимитер (по умолчанию 150 в минуту, всплеск 10). Всплеск
+из ~150 подписок 2026-10-29 вызвал
+`{"error":{"code":30010,"message":"Too Many Inflight Messages!"}}` и сброс
+соединения — отсюда маленький всплеск.
 
-## Tick size, lot size, fees, funding interval — where they come from
+## Тик, лот, комиссии, интервал фандинга — откуда берутся
 
-- **Tick / lot**: integer encoding with `price_decimals` / `size_decimals` → tick `10^-price_decimals`, lot `10^-size_decimals`; minimums `min_base_amount`, `min_quote_amount` ([Market data](https://docs.lighter.xyz/developers/integration-guides/market-data)).
-- **Fees**: `maker_fee` / `taker_fee` per market in `orderBookDetails` (percent). Account tier then applies: docs (2026-10-29) say Standard pays 0 / 0 on regular orders with **taker latency 300 ms, maker latency 0 ms, cancel/modify 300 ms**; Premium 0.0040% / 0.0280% at 0 LIT with 140 ms taker latency ([Trading fees](https://docs.lighter.xyz/trading/trading-fees)). This **differs from SPEC.md**, which says Standard has a 200 ms maker delay and Premium has none — flagged as an open question.
-- **Funding interval**: not a metadata field. Docs: "Funding payments occur at each hour mark" ([Funding](https://docs.lighter.xyz/trading/funding)). The adapter infers the interval per market from consecutive settlement timestamps — at startup via `fundings` (rate-limited) and continuously from `market_stats.funding_timestamp` changes. Never hardcoded.
-- **Funding rate units**: `fundings[].rate` and `market_stats.*funding_rate` are in **percent per interval**. Verified live 2026-10-29: market 0 `rate "0.0012"`, `value "0.028254"` = 0.0012% × ETH index ≈ 2354. Normalised events carry the fraction (`rate / 100`).
-- **Funding direction**: `fundings[].direction` is `long`/`short` — **UNVERIFIED** whether it names the paying side.
-- **Clamp / interest**: `funding_clamp_small`, `funding_clamp_big`, `base_interest_rate` (percent) per market.
-- **Collateral**: USDC (perps). Multi-asset margin exists ([Multi-asset margin](https://docs.lighter.xyz/trading/multi-asset-margin)) — not used in M0.
+- **Тик / лот**: целочисленное кодирование с `price_decimals` / `size_decimals` → тик `10^-price_decimals`, лот `10^-size_decimals`; минимумы — `min_base_amount`, `min_quote_amount` ([Market data](https://docs.lighter.xyz/developers/integration-guides/market-data)).
+- **Комиссии**: `maker_fee` / `taker_fee` рынка в `orderBookDetails` (в процентах). Поверх действует тип аккаунта. Документация (2026-10-29): Standard платит 0 / 0 на обычных ордерах, **задержка тейкера 300 мс, мейкера 0 мс, отмены/изменения 300 мс**; Premium — 0,0040% / 0,0280% при 0 LIT, задержка тейкера 140 мс ([Trading fees](https://docs.lighter.xyz/trading/trading-fees)). SPEC.md приведён в соответствие с этими данными.
+- **Интервал фандинга**: в метаданных его нет. Документация: «Funding payments occur at each hour mark» ([Funding](https://docs.lighter.xyz/trading/funding)). Адаптер выводит интервал по рынку из соседних отметок расчётов — при старте через `fundings` (с учётом лимита) и далее по изменениям `market_stats.funding_timestamp`. Ничего не захардкожено.
+- **Единицы ставки фандинга**: `fundings[].rate` и `market_stats.*funding_rate` — **проценты за интервал**. Проверено вживую 2026-10-29: рынок 0, `rate "0.0012"`, `value "0.028254"` = 0,0012% × индекс ETH ≈ 2354. Нормализованные события содержат долю (`rate / 100`).
+- **Направление фандинга**: `fundings[].direction` — `long`/`short`; называет ли оно платящую сторону — **UNVERIFIED**.
+- **Ограничители и процентная ставка**: `funding_clamp_small`, `funding_clamp_big`, `base_interest_rate` (в процентах) по рынку.
+- **Обеспечение**: USDC (perp). Мультиактивная маржа существует ([Multi-asset margin](https://docs.lighter.xyz/trading/multi-asset-margin)) — в M0 не используется.
 
-## Open points (UNVERIFIED)
+## Открытые вопросы (UNVERIFIED)
 
-- Trade aggressor side from `is_maker_ask`.
-- Whether the 200 messages/min client cap counts WS protocol ping frames.
-- Maker-delay discrepancy between SPEC.md and current docs (see above).
+- Сторона агрессора по `is_maker_ask`.
+- Считаются ли управляющие кадры ping WebSocket в лимит 200 сообщений в минуту.
+- Единицы `min_initial_margin_fraction`: 200 трактуется как 2% → максимальное плечо 50.

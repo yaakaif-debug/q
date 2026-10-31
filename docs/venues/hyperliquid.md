@@ -1,89 +1,89 @@
-# Hyperliquid (core + HIP-3 dexes) — market-data reference for M0
+# Hyperliquid (ядро + HIP-3 дексы) — справка по рыночным данным для M0
 
-Scope: public market data only (no signing, no `/exchange`, no user endpoints).
-All findings checked on **2026-10-29** against the official docs and, where noted,
-against live `https://api.hyperliquid.xyz` responses fetched the same day.
-Anything not confirmed by both docs or a live response is marked **UNVERIFIED**.
+Область: только публичные рыночные данные (без подписей, без `/exchange`, без
+пользовательских эндпоинтов). Все сведения проверены **2026-10-29** по официальной
+документации и, где указано, по живым ответам `https://api.hyperliquid.xyz`,
+полученным в тот же день. Всё, что не подтверждено ни документацией, ни живым
+ответом, помечено **UNVERIFIED**.
 
-## Endpoints
+## Эндпоинты
 
-| Item | Value | Source |
+| Что | Значение | Источник |
 | --- | --- | --- |
-| REST info | `POST https://api.hyperliquid.xyz/info`, JSON body `{"type": ...}` | [Info endpoint](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint) |
-| WebSocket | `wss://api.hyperliquid.xyz/ws` (testnet `wss://api.hyperliquid-testnet.xyz/ws`) | [Websocket](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket) |
+| REST info | `POST https://api.hyperliquid.xyz/info`, тело JSON `{"type": ...}` | [Info endpoint](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint) |
+| WebSocket | `wss://api.hyperliquid.xyz/ws` (тестнет `wss://api.hyperliquid-testnet.xyz/ws`) | [Websocket](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket) |
 
-### REST `info` request types used by M0
+### Запросы REST `info`, которые использует M0
 
-| `type` | Params | Use | Weight |
+| `type` | Параметры | Назначение | Вес |
 | --- | --- | --- | --- |
-| `perpDexs` | — | Dex discovery. Element 0 is `null` (= core, dex `""`), then one object per HIP-3 dex: `name`, `fullName`, `deployer`, `oracleUpdater`, `feeRecipient`, `assetToStreamingOiCap`, `assetToFundingMultiplier`; live response also has `subDeployers`, `assetToFundingInterestRate`, `assetToFundingClamp`. | 20 |
-| `meta` / `metaAndAssetCtxs` | `dex` (`""` = core) | Universe per dex. Live fields per asset: `name`, `szDecimals`, `maxLeverage`, `marginTableId`, `onlyIsolated`, `marginMode` (`strictIsolated` / `noCross`), `isDelisted`, and on HIP-3 also `growthMode`, `deployerFeeScale`, `lastFeeScaleChangeTime`, `lastGrowthModeChangeTime`. Top level: `universe`, `marginTables`, `collateralToken` (spot token index). Asset ctx: `funding`, `openInterest`, `oraclePx`, `markPx`, `midPx`, `premium`, `impactPxs`, `dayNtlVlm`, `prevDayPx`, `dayBaseVlm`. | 20 |
-| `spotMeta` | — | Resolve `collateralToken` index to a token name (USDC, USDH, USDE ...). | 20 |
-| `fundingHistory` | `coin`, `startTime`, `endTime?` | Settled funding: `[{coin, fundingRate, premium, time}]`. HIP-3 coins use the `dex:COIN` name. | 20 + 1 per 20 items |
-| `predictedFundings` | — | Predicted funding + `nextFundingTime` per venue. **Core dex only** (docs: "only supported for the first perp dex"). Live responses (2026-10-29) also carry `fundingIntervalHours` per venue (`HlPerp: 1`), which the docs' example omits. | 20 |
-| `l2Book` | `coin`, `nSigFigs?`, `mantissa?` | Book snapshot (REST fallback). | 2 |
+| `perpDexs` | — | Обнаружение дексов. Элемент 0 — `null` (ядро, dex `""`), далее по объекту на каждый HIP-3 декс: `name`, `fullName`, `deployer`, `oracleUpdater`, `feeRecipient`, `assetToStreamingOiCap`, `assetToFundingMultiplier`; в живом ответе также `subDeployers`, `assetToFundingInterestRate`, `assetToFundingClamp`. | 20 |
+| `meta` / `metaAndAssetCtxs` | `dex` (`""` — ядро) | Инструменты декса. Живые поля актива: `name`, `szDecimals`, `maxLeverage`, `marginTableId`, `onlyIsolated`, `marginMode` (`strictIsolated` / `noCross`), `isDelisted`, у HIP-3 ещё `growthMode`, `deployerFeeScale`, `lastFeeScaleChangeTime`, `lastGrowthModeChangeTime`. Верхний уровень: `universe`, `marginTables`, `collateralToken` (индекс спот-токена). Контекст актива: `funding`, `openInterest`, `oraclePx`, `markPx`, `midPx`, `premium`, `impactPxs`, `dayNtlVlm`, `prevDayPx`, `dayBaseVlm`. | 20 |
+| `spotMeta` | — | Имя токена обеспечения по индексу `collateralToken` (USDC, USDH, USDE ...). | 20 |
+| `fundingHistory` | `coin`, `startTime`, `endTime?` | Расчётный фандинг: `[{coin, fundingRate, premium, time}]`. Монеты HIP-3 — с именем `dex:COIN`. | 20 + 1 на каждые 20 элементов |
+| `predictedFundings` | — | Прогноз фандинга и `nextFundingTime` по площадкам. **Только ядро** (документация: «only supported for the first perp dex»). Живые ответы (2026-10-29) содержат также `fundingIntervalHours` по площадке (`HlPerp: 1`), которого нет в примере документации. | 20 |
+| `l2Book` | `coin`, `nSigFigs?`, `mantissa?` | Снимок стакана (запасной REST-путь). | 2 |
 
-Live check 2026-10-29: `perpDexs` returned core + 10 HIP-3 dexes
-(`xyz, flx, vntl, hyna, km, abcd, cash, para, mkts, io`). Every asset of `flx`,
-`vntl`, `hyna`, `km`, `cash` and `abcd` was `isDelisted` that day; active assets:
-core 179, `xyz` 119, `para` 33, `io` 12, `mkts` 5. Collateral tokens: core, `xyz`,
+Живая проверка 2026-10-29: `perpDexs` вернул ядро и 10 HIP-3 дексов
+(`xyz, flx, vntl, hyna, km, abcd, cash, para, mkts, io`). У `flx`, `vntl`, `hyna`,
+`km`, `cash` и `abcd` в тот день все активы были `isDelisted`; активных активов:
+ядро 179, `xyz` 119, `para` 33, `io` 12, `mkts` 5. Токены обеспечения: ядро, `xyz`,
 `para`, `mkts`, `io`, `abcd` → USDC (0); `flx`, `vntl`, `km` → USDH (360);
-`hyna` → USDE (235); `cash` → USDT0 (268). The adapter never uses this list: it
-calls `perpDexs` at startup and every hour.
+`hyna` → USDE (235); `cash` → USDT0 (268). Адаптер этот список не использует: он
+вызывает `perpDexs` при старте и каждый час.
 
-## WebSocket channels used by M0
+## Каналы WebSocket, которые использует M0
 
-Subscribe: `{"method":"subscribe","subscription":{...}}`; ack:
-`{"channel":"subscriptionResponse","data":{...}}`; data messages:
-`{"channel":"<type>","data":...}`. Source: [Subscriptions](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions).
+Подписка: `{"method":"subscribe","subscription":{...}}`; подтверждение:
+`{"channel":"subscriptionResponse","data":{...}}`; данные:
+`{"channel":"<type>","data":...}`. Источник: [Subscriptions](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions).
 
-| Subscription | Data | Notes |
+| Подписка | Данные | Примечания |
 | --- | --- | --- |
-| `{"type":"l2Book","coin":C}` | `WsBook {coin, levels:[bids, asks], time}`; `WsLevel {px, sz, n}` | **Snapshot feed**: every message is the full top-20 book (5 with `fast: true`), pushed per block, at least 0.5 s apart. No sequence numbers. |
-| `{"type":"trades","coin":C}` | `WsTrade[] {coin, side, px, sz, hash, time, tid, users}` | `side`: `"B"` (buy aggressor) / `"A"` (sell aggressor) — **UNVERIFIED** meaning of aggressor side; docs only say `side: string`. Unique id = `(time, coin, tid)`. |
-| `{"type":"bbo","coin":C}` | `WsBbo {coin, time, bbo:[bid|null, ask|null]}` | Sent only when BBO changes on a block. Off by default in M0 (subscription budget, see below). |
-| `{"type":"allDexsAssetCtxs"}` | `{"ctxs": [[dex, [ctx, ...]], ...]}` | One subscription covers predicted funding, mark/oracle and OI for core and every HIP-3 dex. Docs name the type only (`WsAllDexsAssetCtxs`); shape taken from live captures 2026-10-29: contexts are in the order of that dex's `meta.universe`, so the adapter maps index → coin through the latest metadata. Observed cadence ~1 message per 10–15 s (~140 KB each). |
-| `{"type":"activeAssetCtx","coin":C}` | `{coin, ctx: PerpsAssetCtx}` | Not used (allDexsAssetCtxs is cheaper). |
+| `{"type":"l2Book","coin":C}` | `WsBook {coin, levels:[bids, asks], time}`; `WsLevel {px, sz, n}` | **Поток снимков**: каждое сообщение — полный верх стакана, 20 уровней (5 при `fast: true`), отправляется по блокам не чаще раза в 0,5 с. Номеров последовательности нет. |
+| `{"type":"trades","coin":C}` | `WsTrade[] {coin, side, px, sz, hash, time, tid, users}` | `side`: `"B"` (агрессор покупал) / `"A"` (агрессор продавал) — смысл как стороны агрессора **UNVERIFIED**; в документации только `side: string`. Уникальный id — `(time, coin, tid)`. |
+| `{"type":"bbo","coin":C}` | `WsBbo {coin, time, bbo:[bid|null, ask|null]}` | Отправляется, только когда BBO меняется в блоке. В M0 по умолчанию выключено (бюджет подписок, см. ниже). |
+| `{"type":"allDexsAssetCtxs"}` | `{"ctxs": [[dex, [ctx, ...]], ...]}` | Одна подписка даёт прогнозный фандинг, mark/oracle и ОИ для ядра и всех HIP-3 дексов. Документация называет только тип (`WsAllDexsAssetCtxs`); форма взята из живых записей 2026-10-29: контексты идут в порядке `meta.universe` декса, поэтому адаптер сопоставляет индекс с монетой по последним метаданным. Наблюдаемая частота — примерно одно сообщение раз в 10–15 с (~140 КБ). |
+| `{"type":"activeAssetCtx","coin":C}` | `{coin, ctx: PerpsAssetCtx}` | Не используется (`allDexsAssetCtxs` дешевле). |
 
-Coin naming: core uses `BTC`; HIP-3 uses `dex:COIN`, e.g. `xyz:NVDA`
+Имена монет: ядро — `BTC`; HIP-3 — `dex:COIN`, например `xyz:NVDA`
 ([Asset IDs](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)).
-Asset id for HIP-3 = `100000 + perp_dex_index * 10000 + index_in_meta`.
+Asset id для HIP-3 = `100000 + perp_dex_index * 10000 + index_in_meta`.
 
-Heartbeat: server closes a connection that has not received a message for 60 s;
-client sends `{"method":"ping"}`, server answers `{"channel":"pong"}`
+Пульс: сервер закрывает соединение, если 60 с не получал от клиента сообщений;
+клиент шлёт `{"method":"ping"}`, сервер отвечает `{"channel":"pong"}`
 ([Timeouts and heartbeats](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/timeouts-and-heartbeats)).
-On reconnect the subscription ack carries a fresh snapshot.
+После переподключения подтверждение подписки приносит свежий снимок.
 
-## Rate limits (per IP)
+## Лимиты (на IP)
 
-Source: [Rate limits and user limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits).
+Источник: [Rate limits and user limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits).
 
-- REST: aggregated weight 1200 / minute. `l2Book`, `allMids`, `exchangeStatus` … weight 2; most other `info` 20; `fundingHistory` etc. +1 per 20 items returned.
-- WebSocket: max 10 connections, 30 new connections / minute, **1000 subscriptions**, 2000 client messages / minute, 100 in-flight posts.
-- All HL venue instances (core and every HIP-3 dex) share these limits because they apply per IP.
+- REST: суммарный вес 1200 в минуту. `l2Book`, `allMids`, `exchangeStatus` … — вес 2; большинство прочих `info` — 20; `fundingHistory` и др. — +1 за каждые 20 возвращённых элементов.
+- WebSocket: не более 10 соединений, 30 новых соединений в минуту, **1000 подписок**, 2000 клиентских сообщений в минуту, 100 одновременных post.
+- Все площадки HL (ядро и каждый HIP-3 декс) делят эти лимиты: они действуют на IP.
 
-Consequence for M0: with ~180 active core coins and ~280 HIP-3 coins (live,
-2026-10-29), `l2Book` + `trades` for every coin is ~920 subscriptions, close to
-the 1000 cap. The adapter assigns subscriptions by priority
-(`allDexsAssetCtxs` → `l2Book` → `trades` → `bbo`) up to
-`max_subscriptions` (default 950) and reports uncovered coins in logs and the
-`md_uncovered_streams` gauge.
+Следствие для M0: при ~180 активных монетах ядра и ~280 монетах HIP-3 (живые
+данные 2026-10-29) `l2Book` + `trades` на каждую монету — около 920 подписок,
+близко к лимиту 1000. Адаптер распределяет подписки по приоритету
+(`allDexsAssetCtxs` → `l2Book` → `trades` → `bbo`) в пределах
+`max_subscriptions` (по умолчанию 950) и сообщает о непокрытых монетах в логах и
+метрике `md_uncovered_streams`.
 
-## Tick size, lot size, fees, funding interval — where they come from
+## Тик, лот, комиссии, интервал фандинга — откуда берутся
 
-- **Lot size**: `szDecimals` per asset → step `10^-szDecimals` ([Tick and lot size](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/tick-and-lot-size)).
-- **Price rule**: not a fixed tick. Up to 5 significant figures and at most `MAX_DECIMALS - szDecimals` decimals, `MAX_DECIMALS = 6` for perps; integer prices always valid. Stored as `PriceRule::SigFigs`.
-- **Fees**: per-user tier (14-day volume) from `userFees`, which needs an account address → not available from public metadata; M0 records base-tier inputs only. Public per-asset fee inputs that M0 does record: `deployerFeeScale` and `growthMode` (HIP-3; present in live `meta`, not in the docs' example). Formula in [Fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees): HIP-3 scale = `feeScale + 1` if `feeScale < 1` else `2 * feeScale`; growth mode ×0.1.
-- **Funding interval**: not in `meta`. Core: `predictedFundings[*].HlPerp.fundingIntervalHours` (live field, see above). HIP-3: **inferred** per dex from consecutive `fundingHistory` timestamps (most common spacing across the dex's coins, first coin of each dex polled first). Docs ([Funding](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding)) say funding is paid every hour and "the funding cap and funding interval do not depend on the asset". Nothing hardcodes 1 h. Live 2026-10-29: inference gives 1 h for every dex with active assets.
-- **Predicted funding**: `funding` in the asset ctx (`metaAndAssetCtxs` / `allDexsAssetCtxs`) is the current-hour rate (per interval, not annualised). `predictedFundings` gives `nextFundingTime` for core only. For HIP-3 the next settlement time is derived as last settlement + inferred interval (**UNVERIFIED** that HIP-3 settles on the same hourly grid as core).
-- **Settled funding**: `fundingHistory` (REST). M0 polls every coin hourly through a weight-budgeted limiter.
-- **Collateral**: `collateralToken` (spot token index) → `spotMeta.tokens[i].name`. Live 2026-10-29: core and `xyz` report `0` (USDC).
-- **Margin mode**: `marginMode` / `onlyIsolated` per asset.
-- **Delisting / settlement**: `isDelisted` per asset; deployer `haltTrading` settles at mark ([HIP-3](https://hyperliquid.gitbook.io/hyperliquid-docs/hyperliquid-improvement-proposals-hips/hip-3-builder-deployed-perpetuals)). How a halted-but-not-delisted asset appears in `meta` is **UNVERIFIED**.
+- **Лот**: `szDecimals` актива → шаг `10^-szDecimals` ([Tick and lot size](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/tick-and-lot-size)).
+- **Правило цены**: фиксированного тика нет. До 5 значащих цифр и не более `MAX_DECIMALS - szDecimals` знаков после запятой, `MAX_DECIMALS = 6` для perp; целые цены допустимы всегда. Хранится как `PriceRule::SigFigs`.
+- **Комиссии**: уровень пользователя (объём за 14 дней) из `userFees`, которому нужен адрес аккаунта → в публичных метаданных недоступно; M0 записывает только публичные входные данные. По активу M0 записывает `deployerFeeScale` и `growthMode` (HIP-3; есть в живом `meta`, нет в примере документации). Формула в [Fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees): множитель HIP-3 = `feeScale + 1` при `feeScale < 1`, иначе `2 * feeScale`; growth mode — ×0,1.
+- **Интервал фандинга**: в `meta` его нет. Ядро: `predictedFundings[*].HlPerp.fundingIntervalHours` (живое поле, см. выше). HIP-3: **выводится** по дексу из соседних отметок `fundingHistory` (самый частый шаг по монетам декса; первая монета каждого декса опрашивается первой). Документация ([Funding](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding)) говорит, что фандинг платится каждый час и что «the funding cap and funding interval do not depend on the asset». 1 ч нигде не захардкожен. Живая проверка 2026-10-29: вывод даёт 1 ч для всех дексов с активными активами.
+- **Прогнозный фандинг**: `funding` в контексте актива (`metaAndAssetCtxs` / `allDexsAssetCtxs`) — ставка текущего часа (за интервал, не годовая). `predictedFundings` даёт `nextFundingTime` только для ядра. Для HIP-3 следующий расчёт оценивается как последний расчёт + выведенный интервал (**UNVERIFIED**, что HIP-3 рассчитывается по той же часовой сетке, что и ядро).
+- **Расчётный фандинг**: `fundingHistory` (REST). M0 опрашивает каждую монету раз в час через лимитер по весу.
+- **Обеспечение**: `collateralToken` (индекс спот-токена) → `spotMeta.tokens[i].name`. Живая проверка 2026-10-29: см. список токенов выше.
+- **Режим маржи**: `marginMode` / `onlyIsolated` по активу.
+- **Делистинг и расчёт по mark**: `isDelisted` по активу; деплоер действием `haltTrading` закрывает позиции по mark ([HIP-3](https://hyperliquid.gitbook.io/hyperliquid-docs/hyperliquid-improvement-proposals-hips/hip-3-builder-deployed-perpetuals)). Как в `meta` выглядит остановленный, но не делистингованный актив, — **UNVERIFIED**.
 
-## Open points (UNVERIFIED)
+## Открытые вопросы (UNVERIFIED)
 
-- `allDexsAssetCtxs` has no formal schema in the docs (parsed from live captures).
-- Whether `bbo` and `l2Book` subscriptions for HIP-3 coins count against the same 1000-subscription limit as core (assumed yes, per-IP wording).
-- Trade `side` letter semantics.
-- Disk usage of full-universe `l2Book` recording (estimate in PR, to be measured during the 72 h run).
+- У `allDexsAssetCtxs` нет формальной схемы в документации (разбор по живым записям).
+- Учитываются ли подписки `bbo` и `l2Book` на монеты HIP-3 в тот же лимит 1000, что и ядро (считаем, что да: лимит сформулирован на IP).
+- Смысл букв `side` в сделках.

@@ -1,9 +1,9 @@
-# Fixtures
+# Фикстуры
 
-Captured from live `fapi.asterdex.com` (REST) and `fstream.asterdex.com`
-(combined streams) on 2026-10-29 and trimmed (fewer symbols) to keep them
-small. Message bodies are otherwise as received.
+Записаны с живых `fapi.asterdex.com` (REST) и `fstream.asterdex.com`
+(комбинированные потоки) 2026-10-29 и урезаны (меньше символов), чтобы оставаться
+маленькими. В остальном тела сообщений — как получены.
 
-`ws_depth_update_{1,2,3}.json` are consecutive (`pu` equals the previous `u`).
-`rest_depth_btc.json` is an independent snapshot whose `lastUpdateId` does not
-line up with those updates.
+`ws_depth_update_{1,2,3}.json` идут подряд (`pu` равен `u` предыдущего).
+`rest_depth_btc.json` — независимый снимок, его `lastUpdateId` не стыкуется с
+этими обновлениями.

@@ -1,7 +1,8 @@
-# Fixtures
+# Фикстуры
 
-Captured from live `api.hyperliquid.xyz` (REST `POST /info`, WS `/ws`) on
-2026-10-29 and trimmed (fewer levels, assets, dexes) to keep them small. Message
-bodies are otherwise byte-for-byte as received. `ws_all_dexs_asset_ctxs.json`
-keeps only dexes `""` and `xyz` with their first three contexts, matching the
-first three assets of `rest_meta_and_asset_ctxs_*.json`.
+Записаны с живого `api.hyperliquid.xyz` (REST `POST /info`, WS `/ws`) 2026-10-29
+и урезаны (меньше уровней, активов, дексов), чтобы оставаться маленькими. В
+остальном тела сообщений — байт в байт как получены.
+`ws_all_dexs_asset_ctxs.json` содержит только дексы `""` и `xyz` с первыми тремя
+контекстами — они соответствуют первым трём активам из
+`rest_meta_and_asset_ctxs_*.json`.
