@@ -185,3 +185,12 @@ tick_ms = 1000
 socket = "run/spread-hunter.sock"
 # Появление файла включает kill switch; содержимое "flatten" — со сбросом позиций.
 kill_file = "run/KILL"
+
+[execution]
+# Приватные адаптеры (M2+). Ключей здесь нет: они в зашифрованном файле секретов.
+lighter_signer_lib = "signers/lighter-signer-linux-amd64.so"
+# Дексы Hyperliquid, по которым читаются позиции и балансы ("" — ядро).
+hyperliquid_dexes = [""]
+hyperliquid_usdc_token = ""   # пусто — значение по сети (docs/venues/hyperliquid.md)
+aster_rest = ""               # пусто — https://fapi3.asterdex.com
+aster_ws = ""                 # пусто — wss://fstream.asterdex.com

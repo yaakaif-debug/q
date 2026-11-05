@@ -16,7 +16,7 @@ use spread_hunter::replay_source::parse_time;
 use spread_hunter::runner::{self, install_crypto};
 
 #[derive(Parser)]
-#[command(name = "spread-hunter", version, about = "Delta-neutral spread engine (M0: market-data recorder)")]
+#[command(name = "spread-hunter", version, about = "Delta-neutral spread engine")]
 struct Cli {
     /// Базовый конфиг.
     #[arg(long, default_value = "config/default.toml", global = true)]
@@ -30,7 +30,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Запуск в режиме из конфига (`record`, `scan`).
+    /// Запуск в режиме из конфига (`record`, `scan`, `paper`).
     Run,
     /// Загрузить и вывести нормализованные метаданные площадок (JSON).
     Metadata {
@@ -65,6 +65,33 @@ enum Cmd {
         /// Каталог отчётов.
         #[arg(long, default_value = "reports/replay")]
         out: PathBuf,
+    },
+    /// Проверка приватных адаптеров малыми ордерами (запускает оператор; ставит ордера).
+    Selftest {
+        /// `testnet` или `mainnet`.
+        #[arg(long)]
+        network: String,
+        /// Максимальный номинал одного ордера, $ (не больше 1000).
+        #[arg(long)]
+        max_notional_usd: rust_decimal::Decimal,
+        /// `all`, `hyperliquid`, `lighter` или `aster`.
+        #[arg(long, default_value = "all")]
+        venue: String,
+        /// Символ Hyperliquid (ядро `BTC` или HIP-3 `xyz:NVDA`).
+        #[arg(long, default_value = "BTC")]
+        symbol_hyperliquid: String,
+        /// Символ Lighter.
+        #[arg(long, default_value = "ETH")]
+        symbol_lighter: String,
+        /// Символ Aster.
+        #[arg(long, default_value = "BTCUSDT")]
+        symbol_aster: String,
+        /// HIP-3 декс для проверки перевода $1 туда и обратно.
+        #[arg(long)]
+        transfer_dex: Option<String>,
+        /// Обязательно для mainnet: ордера реальные.
+        #[arg(long)]
+        i_understand_real_money: bool,
     },
     /// Производные Parquet за сутки UTC (ночное задание).
     Derive {
@@ -129,6 +156,36 @@ fn main() -> anyhow::Result<()> {
                 match cmd {
                     Cmd::Run => runner::run_live(cfg).await,
                     Cmd::Metadata { venue } => metadata(cfg, &venue).await,
+                    Cmd::Selftest {
+                        network,
+                        max_notional_usd,
+                        venue,
+                        symbol_hyperliquid,
+                        symbol_lighter,
+                        symbol_aster,
+                        transfer_dex,
+                        i_understand_real_money,
+                    } => {
+                        init_cli_logging();
+                        let symbols = std::collections::BTreeMap::from([
+                            (sh_core::Exchange::Hyperliquid, symbol_hyperliquid),
+                            (sh_core::Exchange::Lighter, symbol_lighter),
+                            (sh_core::Exchange::Aster, symbol_aster),
+                        ]);
+                        let args = spread_hunter::selftest::CliArgs {
+                            network,
+                            max_notional_usd,
+                            venue,
+                            symbols,
+                            transfer_dex,
+                            real_money: i_understand_real_money,
+                        };
+                        if spread_hunter::selftest::run_cli(cfg, args).await? {
+                            Ok(())
+                        } else {
+                            anyhow::bail!("selftest: some steps failed")
+                        }
+                    }
                     _ => Ok(()),
                 }
             })

@@ -10,5 +10,6 @@ pub mod monitor;
 pub mod replay_source;
 pub mod runner;
 pub mod scan;
+pub mod selftest;
 pub mod simdrive;
 pub mod trade;

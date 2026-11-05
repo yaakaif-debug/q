@@ -55,6 +55,36 @@ pub struct AppConfig {
     pub paper: PaperConfig,
     /// Управление (сокет spread-ctl, файл kill switch).
     pub control: ControlConfig,
+    /// Приватное исполнение (адаптеры, подписанты).
+    pub execution: ExecutionConfig,
+}
+
+/// Настройки `[execution]` приватных адаптеров.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct ExecutionConfig {
+    /// Библиотека подписанта Lighter (`linux-amd64.so` на сервере, `darwin-arm64.dylib` локально).
+    pub lighter_signer_lib: String,
+    /// Дексы Hyperliquid для позиций и балансов (`""` — ядро).
+    pub hyperliquid_dexes: Vec<String>,
+    /// Токен USDC для `agentSendAsset` (пусто — по сети).
+    pub hyperliquid_usdc_token: String,
+    /// REST Aster v3 для подписанных запросов (пусто — по сети).
+    pub aster_rest: String,
+    /// WebSocket Aster для пользовательского потока (пусто — по сети).
+    pub aster_ws: String,
+}
+
+impl Default for ExecutionConfig {
+    fn default() -> Self {
+        Self {
+            lighter_signer_lib: "signers/lighter-signer-linux-amd64.so".into(),
+            hyperliquid_dexes: vec![String::new()],
+            hyperliquid_usdc_token: String::new(),
+            aster_rest: String::new(),
+            aster_ws: String::new(),
+        }
+    }
 }
 
 /// Настройки `[paper]`: симулированные площадки для paper и backtest.

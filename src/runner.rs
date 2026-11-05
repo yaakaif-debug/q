@@ -59,8 +59,11 @@ pub fn make_alerts(cfg: &AppConfig, secrets: &mut Secrets) -> anyhow::Result<Ale
     Ok(make_telegram(cfg, secrets)?.0)
 }
 
+/// Клиент команд Telegram и разрешённые пользователи.
+pub type TelegramCommands = Option<(Telegram, Vec<i64>)>;
+
 /// Оповещения и клиент команд Telegram с разрешёнными пользователями.
-pub fn make_telegram(cfg: &AppConfig, secrets: &mut Secrets) -> anyhow::Result<(Alerts, Option<(Telegram, Vec<i64>)>)> {
+pub fn make_telegram(cfg: &AppConfig, secrets: &mut Secrets) -> anyhow::Result<(Alerts, TelegramCommands)> {
     if !cfg.telegram.enabled {
         return Ok((Alerts::log_only(), None));
     }
