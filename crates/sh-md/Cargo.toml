@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 sh-core.workspace = true
+sh-venue-api.workspace = true
+serde.workspace = true
 rust_decimal.workspace = true
 thiserror.workspace = true
 

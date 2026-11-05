@@ -1947,7 +1947,9 @@ version = "0.1.0"
 dependencies = [
  "proptest",
  "rust_decimal",
+ "serde",
  "sh-core",
+ "sh-venue-api",
  "thiserror",
 ]
 
@@ -1962,6 +1964,21 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "sh-signals"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "figment",
+ "proptest",
+ "rust_decimal",
+ "serde",
+ "sh-core",
+ "sh-md",
+ "sh-venue-api",
+ "thiserror",
 ]
 
 [[package]]
