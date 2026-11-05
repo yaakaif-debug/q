@@ -6,6 +6,7 @@ pub mod config;
 pub mod feed;
 pub mod normalize;
 pub mod replay;
+pub mod sign;
 pub mod subs;
 pub mod wire;
 
