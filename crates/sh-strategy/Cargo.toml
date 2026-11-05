@@ -1,0 +1,19 @@
+[package]
+name = "sh-strategy"
+description = "Strategy trait and the S1/S2 funding-carry strategies"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sh-core.workspace = true
+sh-venue-api.workspace = true
+sh-md.workspace = true
+sh-signals.workspace = true
+serde.workspace = true
+rust_decimal.workspace = true
+
+[lints]
+workspace = true

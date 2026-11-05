@@ -4568,6 +4568,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sh-strategy"
+version = "0.1.0"
+dependencies = [
+ "rust_decimal",
+ "serde",
+ "sh-core",
+ "sh-md",
+ "sh-signals",
+ "sh-venue-api",
+]
+
+[[package]]
 name = "sh-venue-api"
 version = "0.1.0"
 dependencies = [

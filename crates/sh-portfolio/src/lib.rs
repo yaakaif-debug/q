@@ -2,8 +2,10 @@
 //! и лимитам риска, фандинг по фактическим расчётам, издержки по стаканам) и дневные
 //! отчёты; позиции по площадкам, сверка и перебалансировка добавляются в M2–M4.
 
+pub mod book;
 pub mod report;
 pub mod shadow;
 
+pub use book::{Book, LegPos, Lifecycle, Mismatch, PairPosition};
 pub use report::{DailyReport, OpportunityRow, PositionRow, opportunities_csv, opportunity_rows};
 pub use shadow::{LedgerEntry, LedgerKind, ShadowParams, ShadowPortfolio, ShadowPosition, StepOutcome};

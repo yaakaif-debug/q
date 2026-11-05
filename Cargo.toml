@@ -15,6 +15,7 @@ members = [
     "crates/sh-sim",
     "crates/sh-exec",
     "crates/sh-risk",
+    "crates/sh-strategy",
 ]
 
 [workspace.package]
@@ -38,6 +39,7 @@ sh-portfolio = { path = "crates/sh-portfolio" }
 sh-sim = { path = "crates/sh-sim" }
 sh-exec = { path = "crates/sh-exec" }
 sh-risk = { path = "crates/sh-risk" }
+sh-strategy = { path = "crates/sh-strategy" }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
