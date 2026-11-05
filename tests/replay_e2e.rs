@@ -86,5 +86,15 @@ fn replay_writes_daily_report() {
     // пара BTC оценена: метаданные обеих ног восстановлены из записей
     assert!(csv.lines().any(|l| l.starts_with("BTC:hyperliquid/BTC~aster/BTCUSDT")), "{csv}");
     assert_eq!(s.opened, 0);
+
+    // бэктест по тем же записям: дважды, результат побайтно одинаков
+    let (b1, b2) = (dir.join("bt1"), dir.join("bt2"));
+    let r1 = spread_hunter::backtest::run_backtest(&cfg, &raw, t0 - 60_000, t0 + 20 * 60_000, &b1).unwrap();
+    let r2 = spread_hunter::backtest::run_backtest(&cfg, &raw, t0 - 60_000, t0 + 20 * 60_000, &b2).unwrap();
+    assert_eq!(r1, r2);
+    assert_eq!(r1.records, records.len() as u64);
+    for f in ["ledger.csv", "final-status.json", "alerts.log"] {
+        assert_eq!(std::fs::read(b1.join(f)).unwrap(), std::fs::read(b2.join(f)).unwrap(), "{f}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

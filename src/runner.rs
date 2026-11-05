@@ -56,12 +56,19 @@ pub fn scan_settings(cfg: &AppConfig) -> ScanSettings {
 
 /// Оповещения: Telegram при включённой настройке и наличии секретов, иначе лог.
 pub fn make_alerts(cfg: &AppConfig, secrets: &mut Secrets) -> anyhow::Result<Alerts> {
+    Ok(make_telegram(cfg, secrets)?.0)
+}
+
+/// Оповещения и клиент команд Telegram с разрешёнными пользователями.
+pub fn make_telegram(cfg: &AppConfig, secrets: &mut Secrets) -> anyhow::Result<(Alerts, Option<(Telegram, Vec<i64>)>)> {
     if !cfg.telegram.enabled {
-        return Ok(Alerts::log_only());
+        return Ok((Alerts::log_only(), None));
     }
     let tg = secrets.telegram.take().context("telegram.enabled = true but [telegram] is missing in secrets")?;
+    let allowed = tg.allowed_user_ids.clone();
     let client = Telegram::new(tg.bot_token, tg.chat_id).map_err(anyhow::Error::msg)?;
-    Ok(Alerts::spawn(client, Duration::from_secs(cfg.telegram.dedupe_secs), cfg.telegram.per_minute))
+    let alerts = Alerts::spawn(client.clone(), Duration::from_secs(cfg.telegram.dedupe_secs), cfg.telegram.per_minute);
+    Ok((alerts, Some((client, allowed))))
 }
 
 /// Запуск в режиме из конфигурации (`record` или `scan`).
@@ -74,7 +81,7 @@ pub async fn run_live(cfg: AppConfig) -> anyhow::Result<()> {
         tracing::warn!(proxy = %format!("{}:{}", p.host, p.port), "websocket traffic goes through an HTTP proxy");
     }
     let mut secrets = Secrets::load(&cfg.secrets.source().map_err(anyhow::Error::msg)?).context("secrets")?;
-    let alerts = make_alerts(&cfg, &mut secrets)?;
+    let (alerts, tg_commands) = make_telegram(&cfg, &mut secrets)?;
 
     let clock: Arc<dyn Clock> = Arc::new(SystemClock::new());
     let recorder = if cfg.recorder.enabled {
@@ -99,6 +106,22 @@ pub async fn run_live(cfg: AppConfig) -> anyhow::Result<()> {
         "scan" => {
             let state = ScanState::open(&cfg, clock.wall_ms()).await?;
             tokio::spawn(scan_loop(md_rx, clock.clone(), state, alerts.clone()))
+        }
+        "paper" => {
+            let state = crate::trade::PaperState::open(&cfg, clock.wall_ms()).await?;
+            let (ctl_tx, ctl_rx) = mpsc::channel(16);
+            let sock = PathBuf::from(&cfg.control.socket);
+            let tx = ctl_tx.clone();
+            tokio::spawn(async move {
+                if let Err(e) = crate::ctl::serve(sock, tx).await {
+                    tracing::error!(error = %e, "control socket failed");
+                }
+            });
+            if let Some((tg, allowed)) = tg_commands.clone() {
+                tokio::spawn(crate::ctl::telegram_commands(tg, allowed, ctl_tx.clone()));
+            }
+            drop(ctl_tx);
+            tokio::spawn(crate::trade::paper_loop(md_rx, ctl_rx, clock.clone(), state, alerts.clone()))
         }
         _ => tokio::spawn(monitor::run(md_rx, clock.clone())),
     };
@@ -227,6 +250,11 @@ fn kind_from(s: &str) -> Option<LedgerKind> {
         "basis" => LedgerKind::Basis,
         _ => return None,
     })
+}
+
+/// Строка базы из записи журнала.
+pub fn ledger_to_row(e: &LedgerEntry) -> LedgerRow {
+    to_row(e)
 }
 
 fn to_row(e: &LedgerEntry) -> LedgerRow {

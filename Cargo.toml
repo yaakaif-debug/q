@@ -101,6 +101,14 @@ path = "src/main.rs"
 name = "latency-probe"
 path = "src/bin/latency-probe.rs"
 
+[[bin]]
+name = "spread-ctl"
+path = "src/bin/spread-ctl.rs"
+
+[[bin]]
+name = "backtest"
+path = "src/bin/backtest.rs"
+
 [dependencies]
 sh-core.workspace = true
 sh-md.workspace = true
