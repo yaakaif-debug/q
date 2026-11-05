@@ -4507,6 +4507,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sh-risk"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "rust_decimal",
+ "serde",
+ "sh-core",
+ "sh-signals",
+ "sh-venue-api",
+ "thiserror",
+]
+
+[[package]]
 name = "sh-signals"
 version = "0.1.0"
 dependencies = [
