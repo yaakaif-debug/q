@@ -18,6 +18,8 @@ pub struct MarketBuilder {
     pub market: MarketState,
     /// Текущее время, мс.
     pub now_ms: i64,
+    /// Все применённые события по порядку (для повтора через симулятор и движок).
+    pub events: Vec<MdEvent>,
 }
 
 /// Описание инструмента.
@@ -74,9 +76,31 @@ fn ev(key: &InstrumentKey, now_ms: i64, kind: MdEventKind) -> MdEvent {
 }
 
 impl MarketBuilder {
+    /// Применяет событие и записывает его.
+    pub fn push(&mut self, e: MdEvent) {
+        self.market.apply(&e);
+        self.events.push(e);
+    }
+
+    /// Сделки на инструменте в текущий момент (`taker` — сторона агрессора).
+    pub fn trade(&mut self, key: &InstrumentKey, px: Decimal, qty: Decimal, taker: sh_core::Side) {
+        let now = self.now_ms;
+        self.push(ev(
+            key,
+            now,
+            MdEventKind::Trades(vec![sh_venue_api::TradeEvent {
+                px: Px(px),
+                qty: Qty(qty),
+                taker_side: Some(taker),
+                trade_id: None,
+                ts_ms: Some(now),
+            }]),
+        ));
+    }
+
     /// Пустой рынок на момент `now_ms` (по умолчанию — 30 дней от эпохи).
     pub fn new() -> Self {
-        Self { market: MarketState::new(), now_ms: 30 * 24 * HOUR_MS }
+        Self { market: MarketState::new(), now_ms: 30 * 24 * HOUR_MS, events: Vec::new() }
     }
 
     /// Добавляет инструмент с историей расчётов за `history_h` часов.
@@ -105,14 +129,14 @@ impl MarketBuilder {
             listed_at_ms: s.listed_at_ms,
         };
         let now = self.now_ms;
-        self.market.apply(&ev(&s.key, now, MdEventKind::Metadata(Box::new(meta))));
+        self.push(ev(&s.key, now, MdEventKind::Metadata(Box::new(meta))));
         self.set_book(&s.key, s.mid, s.half_spread, s.level_qty);
-        self.market.apply(&ev(
+        self.push(ev(
             &s.key,
             now,
             MdEventKind::Mark { mark: Some(Px(s.mid)), index: Some(Px(s.mid)), oracle: Some(Px(s.mid)), mid: None },
         ));
-        self.market.apply(&ev(&s.key, now, MdEventKind::OpenInterest { base: None, usd: Some(Usd(s.oi_usd)) }));
+        self.push(ev(&s.key, now, MdEventKind::OpenInterest { base: None, usd: Some(Usd(s.oi_usd)) }));
         let step = (s.interval_h * Decimal::from(HOUR_MS)).trunc().try_into().unwrap_or(HOUR_MS);
         let mut t = now - history_h * HOUR_MS;
         t -= t.rem_euclid(step);
@@ -120,7 +144,7 @@ impl MarketBuilder {
             self.settle(&s.key, t, s.rate);
             t += step;
         }
-        self.market.apply(&ev(
+        self.push(ev(
             &s.key,
             now,
             MdEventKind::Funding(FundingUpdate {
@@ -140,13 +164,13 @@ impl MarketBuilder {
         let asks: Vec<Level> =
             (0..20).map(|i| Level::new(Px(mid + half_spread + step * Decimal::from(i)), Qty(level_qty))).collect();
         let now = self.now_ms;
-        self.market.apply(&ev(key, now, MdEventKind::BookSnapshot { bids, asks, seq: None }));
+        self.push(ev(key, now, MdEventKind::BookSnapshot { bids, asks, seq: None }));
     }
 
     /// Расчёт фандинга.
     pub fn settle(&mut self, key: &InstrumentKey, ts_ms: i64, rate: Decimal) {
         let now = self.now_ms;
-        self.market.apply(&ev(
+        self.push(ev(
             key,
             now,
             MdEventKind::Funding(FundingUpdate {
@@ -160,7 +184,7 @@ impl MarketBuilder {
     /// Прогноз фандинга.
     pub fn predict(&mut self, key: &InstrumentKey, rate: Decimal) {
         let now = self.now_ms;
-        self.market.apply(&ev(
+        self.push(ev(
             key,
             now,
             MdEventKind::Funding(FundingUpdate { predicted_rate: Some(rate), ..FundingUpdate::default() }),

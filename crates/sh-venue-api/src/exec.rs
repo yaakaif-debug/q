@@ -271,7 +271,7 @@ pub enum ExecEvent {
 }
 
 /// Ошибка исполнения. Тексты без секретов.
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExecError {
     /// Площадка отклонила запрос.
     #[error("rejected: {0}")]
@@ -290,7 +290,7 @@ pub enum ExecError {
     Invalid(String),
     /// Операция не поддерживается площадкой.
     #[error("not supported: {0}")]
-    NotSupported(&'static str),
+    NotSupported(String),
     /// Ошибка ключей или подписи.
     #[error("auth: {0}")]
     Auth(String),
@@ -334,11 +334,61 @@ pub trait Execution: Send + Sync {
 
     /// Перевод обеспечения между дексами одной платформы (Hyperliquid HIP-3).
     fn transfer_between_dexes(&self, _from_dex: String, _to_dex: String, _amount: Usd) -> ExecFuture<'_, ()> {
-        Box::pin(async { Err(ExecError::NotSupported("transfer between dexes")) })
+        Box::pin(async { Err(ExecError::NotSupported("transfer between dexes".into())) })
     }
 
     /// Приватный поток событий до сигнала остановки.
     fn run_stream(&self, tx: mpsc::Sender<ExecEvent>, shutdown: watch::Receiver<bool>) -> ExecFuture<'_, ()>;
+}
+
+/// Команда движка исполнения. Движок синхронный: команды исполняет оболочка
+/// (симулятор напрямую, live — через `Execution` в отдельных задачах).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecCommand {
+    /// Отправить ордер.
+    Place(OrderRequest),
+    /// Отменить ордер.
+    Cancel {
+        /// Площадка.
+        venue: VenueKey,
+        /// Символ.
+        symbol: String,
+        /// Клиентский идентификатор.
+        cid: ClientId,
+    },
+    /// Отменить все ордера на семействе площадок.
+    CancelAll(Exchange),
+    /// Запросить состояние ордера.
+    Query {
+        /// Площадка.
+        venue: VenueKey,
+        /// Символ.
+        symbol: String,
+        /// Клиентский идентификатор.
+        cid: ClientId,
+    },
+}
+
+/// Результат команды.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CommandResult {
+    /// Ответ на отправку.
+    Placed(ClientId, Result<OrderUpdate, ExecError>),
+    /// Ответ на отмену.
+    Cancelled(ClientId, Result<(), ExecError>),
+    /// Ответ на отмену всех.
+    CancelledAll(Exchange, Result<u32, ExecError>),
+    /// Ответ на запрос.
+    Queried(ClientId, Result<Option<OrderUpdate>, ExecError>),
+}
+
+/// Вход движка от исполнения: событие потока или результат команды.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecInput {
+    /// Событие приватного потока.
+    Event(ExecEvent),
+    /// Результат команды.
+    Result(CommandResult),
 }
 
 /// Поиск метаданных в реестре.

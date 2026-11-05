@@ -12,6 +12,7 @@ members = [
     "crates/sh-obs",
     "crates/sh-signals",
     "crates/sh-portfolio",
+    "crates/sh-sim",
 ]
 
 [workspace.package]
@@ -32,6 +33,7 @@ sh-store = { path = "crates/sh-store" }
 sh-obs = { path = "crates/sh-obs" }
 sh-signals = { path = "crates/sh-signals" }
 sh-portfolio = { path = "crates/sh-portfolio" }
+sh-sim = { path = "crates/sh-sim" }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }

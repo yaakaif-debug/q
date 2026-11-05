@@ -21,8 +21,9 @@ pub use conn::{ConnSpec, Outbox, PingKind, Session, run_connection};
 pub use error::VenueError;
 pub use events::{FundingUpdate, MdEvent, MdEventKind, TradeEvent};
 pub use exec::{
-    ClientId, ClientIdGen, ExecError, ExecEvent, ExecFuture, Execution, Fill, FundingPayment, InstrumentId,
-    MetaRegistry, OrderRequest, OrderStatus, OrderUpdate, Tif, VenueBalance, VenuePosition, meta_of,
+    ClientId, ClientIdGen, CommandResult, ExecCommand, ExecError, ExecEvent, ExecFuture, ExecInput, Execution, Fill,
+    FundingPayment, InstrumentId, MetaRegistry, OrderRequest, OrderStatus, OrderUpdate, Tif, VenueBalance,
+    VenuePosition, meta_of,
 };
 pub use funding::{FundingIntervalTracker, infer_interval_ms};
 pub use meta::{FeeInfo, FeeSource, InstrumentMeta, InstrumentStatus, PriceRule, Rounding};

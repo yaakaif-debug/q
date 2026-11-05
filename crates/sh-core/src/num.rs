@@ -192,3 +192,60 @@ mod tests {
         }
     }
 }
+
+/// Результат применения сделки к позиции.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PositionChange {
+    /// Новое количество со знаком.
+    pub qty: Decimal,
+    /// Новая средняя цена входа (0 для нулевой позиции).
+    pub entry_px: Decimal,
+    /// Реализованный результат закрытой части.
+    pub realized: Decimal,
+}
+
+/// Применяет сделку `dq` (со знаком) по цене `px` к позиции `qty` со средней ценой `entry_px`.
+/// Увеличение — средневзвешенная цена; сокращение — реализация по старой цене входа;
+/// переворот — остаток открывается по цене сделки.
+pub fn apply_fill(qty: Decimal, entry_px: Decimal, dq: Decimal, px: Decimal) -> PositionChange {
+    let same = qty.is_zero() || (qty > Decimal::ZERO) == (dq > Decimal::ZERO);
+    let new = qty + dq;
+    if dq.is_zero() {
+        return PositionChange { qty, entry_px, realized: Decimal::ZERO };
+    }
+    if same {
+        let entry = if new.is_zero() { Decimal::ZERO } else { (entry_px * qty.abs() + px * dq.abs()) / new.abs() };
+        return PositionChange { qty: new, entry_px: entry, realized: Decimal::ZERO };
+    }
+    let closing = dq.abs().min(qty.abs());
+    let dir = if qty > Decimal::ZERO { Decimal::ONE } else { -Decimal::ONE };
+    let realized = closing * (px - entry_px) * dir;
+    let entry = if new.is_zero() {
+        Decimal::ZERO
+    } else if (new > Decimal::ZERO) != (qty > Decimal::ZERO) {
+        px
+    } else {
+        entry_px
+    };
+    PositionChange { qty: new, entry_px: entry, realized }
+}
+
+#[cfg(test)]
+mod position_tests {
+    use super::*;
+    use rust_decimal::dec;
+
+    #[test]
+    fn open_add_reduce_flip() {
+        let a = apply_fill(dec!(0), dec!(0), dec!(2), dec!(100));
+        assert_eq!((a.qty, a.entry_px), (dec!(2), dec!(100)));
+        let b = apply_fill(a.qty, a.entry_px, dec!(2), dec!(110));
+        assert_eq!(b.entry_px, dec!(105));
+        let c = apply_fill(b.qty, b.entry_px, dec!(-1), dec!(115));
+        assert_eq!((c.qty, c.entry_px, c.realized), (dec!(3), dec!(105), dec!(10)));
+        let d = apply_fill(c.qty, c.entry_px, dec!(-5), dec!(100));
+        assert_eq!((d.qty, d.entry_px, d.realized), (dec!(-2), dec!(100), dec!(-15)));
+        let e = apply_fill(d.qty, d.entry_px, dec!(2), dec!(90));
+        assert_eq!((e.qty, e.entry_px, e.realized), (dec!(0), dec!(0), dec!(20)));
+    }
+}

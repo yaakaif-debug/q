@@ -4507,6 +4507,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sh-sim"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "rust_decimal",
+ "serde",
+ "sh-core",
+ "sh-md",
+ "sh-signals",
+ "sh-venue-api",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sh-store"
 version = "0.1.0"
 dependencies = [
