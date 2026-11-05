@@ -4448,6 +4448,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sh-exec"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "rust_decimal",
+ "serde",
+ "sh-core",
+ "sh-md",
+ "sh-signals",
+ "sh-sim",
+ "sh-venue-api",
+ "tracing",
+]
+
+[[package]]
 name = "sh-md"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,24 @@
+[package]
+name = "sh-exec"
+description = "Order state machine, S5 maker-first pair jobs: slicing, hedging, timeouts, unwind"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sh-core.workspace = true
+sh-venue-api.workspace = true
+sh-md.workspace = true
+serde.workspace = true
+rust_decimal.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+sh-sim.workspace = true
+sh-signals.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

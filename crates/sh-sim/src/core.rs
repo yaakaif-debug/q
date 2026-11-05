@@ -45,6 +45,8 @@ pub enum FailMode {
     Down,
     /// Команды исполняются, но ответ теряется (тайм-аут): исход неизвестен.
     LostReplies,
+    /// Как `LostReplies`, и приватный поток тоже молчит: состояние узнаётся только запросом.
+    Blackout,
 }
 
 /// Параметры симулятора.
@@ -117,6 +119,7 @@ struct Pending {
     seq: u64,
     cmd: ExecCommand,
     lost_reply: bool,
+    blackout: bool,
 }
 
 /// Синхронный симулятор всех площадок.
@@ -215,10 +218,11 @@ impl SimCore {
                 self.out.push(ExecInput::Result(failed(&cmd, err)));
                 return;
             }
-            Some(FailMode::LostReplies) => {
+            Some(FailMode::LostReplies | FailMode::Blackout) => {
                 let due_ms = now_ms + self.latency(&cmd);
                 self.seq += 1;
-                self.pending.push_back(Pending { due_ms, seq: self.seq, cmd, lost_reply: true });
+                let blackout = self.fail.get(&ex) == Some(&FailMode::Blackout);
+                self.pending.push_back(Pending { due_ms, seq: self.seq, cmd, lost_reply: true, blackout });
                 return;
             }
             None => {}
@@ -228,7 +232,7 @@ impl SimCore {
         // очередь упорядочена по (время, номер): вставка с сохранением порядка
         let pos =
             self.pending.iter().position(|p| (p.due_ms, p.seq) > (due_ms, self.seq)).unwrap_or(self.pending.len());
-        self.pending.insert(pos, Pending { due_ms, seq: self.seq, cmd, lost_reply: false });
+        self.pending.insert(pos, Pending { due_ms, seq: self.seq, cmd, lost_reply: false, blackout: false });
     }
 
     /// Продвигает время до `now_ms`, исполняя наступившие команды; возвращает накопленный выход.
@@ -246,6 +250,16 @@ impl SimCore {
                 for o in &mut self.out[before..] {
                     if let ExecInput::Result(r) = o {
                         *r = failed(&p.cmd, ExecError::Timeout);
+                    }
+                }
+                if p.blackout {
+                    let mut i = before;
+                    while i < self.out.len() {
+                        if matches!(self.out[i], ExecInput::Event(_)) {
+                            self.out.remove(i);
+                        } else {
+                            i += 1;
+                        }
                     }
                 }
             }
