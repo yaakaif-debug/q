@@ -43,11 +43,13 @@ impl Harness {
         let h = InstrumentSpec::liquid("hyperliquid/ETH", dec!(0.00001), dec!(1));
         b.add(&m, 2);
         b.add(&h, 2);
-        let mut p = SimParams::default();
-        p.initial_cash = BTreeMap::from([
-            (VenueKey::new(Exchange::Aster), Usd(dec!(50000))),
-            (VenueKey::hyperliquid(""), Usd(dec!(50000))),
-        ]);
+        let p = SimParams {
+            initial_cash: BTreeMap::from([
+                (VenueKey::new(Exchange::Aster), Usd(dec!(50000))),
+                (VenueKey::hyperliquid(""), Usd(dec!(50000))),
+            ]),
+            ..SimParams::default()
+        };
         let mut sim = SimCore::new(p);
         for e in &b.events {
             sim.on_md(e);

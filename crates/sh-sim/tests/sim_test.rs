@@ -23,8 +23,7 @@ fn setup() -> (SimCore, MarketBuilder, InstrumentKey) {
     let mut b = MarketBuilder::new();
     let spec = InstrumentSpec::liquid("lighter/ETH", dec!(0.0001), dec!(1));
     b.add(&spec, 2);
-    let mut params = SimParams::default();
-    params.initial_cash = BTreeMap::from([(lighter(), Usd(dec!(10000)))]);
+    let params = SimParams { initial_cash: BTreeMap::from([(lighter(), Usd(dec!(10000)))]), ..SimParams::default() };
     let mut sim = SimCore::new(params);
     for e in &b.events {
         sim.on_md(e);
