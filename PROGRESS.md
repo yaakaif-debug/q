@@ -16,7 +16,7 @@
 | --- | --- | --- | --- | --- |
 | M0 | `claude/lucid-mccarthy-gx3vbm` | `main` | #1 | готов, ждёт слияния |
 | M1 | `claude/m1-scanner` | M0 | #2 | код готов, PR открыт |
-| M2 | `claude/m2-execution` | M1 | см. ниже | код готов, PR открыт |
+| M2 | `claude/m2-execution` | M1 | #3 | код готов, PR открыт |
 | M3 | `claude/m3-live-hl-lighter` | M2 | — | не начат |
 | M4 | `claude/m4-aster-ramp` | M3 | — | не начат |
 
