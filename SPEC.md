@@ -428,6 +428,10 @@ pub fn funding_apr(rate_per_interval: Decimal, interval_hours: Decimal) -> Decim
 }
 ```
 
+### Testing responsibility
+
+From M1 on, Claude Code writes the code for M1–M4 and its unit, property, fixture and simulated-venue tests, but runs **no acceptance tests and no live or testnet tests**: no recording runs counted toward acceptance, no orders, no `selftest`, no shadow or paper runs against live venues. The operator runs all of them on his own server, including every acceptance criterion in the table below. Live trading is off by default: `engine.mode` defaults to `paper`, and live trading requires `mode = "live"` in the config together with the CLI flags `--live --i-understand-real-money`; every venue keeps `trading_enabled = false` by default.
+
 ### Milestones
 
 | Milestone | Deliverables | Acceptance |
@@ -446,4 +450,5 @@ As of 2026-10-29: [arb.sh perp DEX tracker](https://arb.sh/) · [HIP-3 builder-d
 
 ## Revisions
 
+- 2026-11-05: Testing responsibility section added (the operator runs every acceptance, testnet and live test; Claude Code only writes code and offline tests). Live trading gate: `engine.mode = "live"` plus `--live --i-understand-real-money`; `engine.mode` defaults to `paper`.
 - 2026-10-31: Lighter Standard/Premium delays updated to the current Lighter docs (Standard has no maker delay; takers and cancels/modifies wait 300 ms). Aster collateral is per contract (USDT, USDC, USD1, U) instead of "USDT-quoted", as seen in live `exchangeInfo`. futures-util, tokio-rustls, rustls and rustls-native-certs added to the approved dependencies. Parquet derivation moved from M0 to M1. Details and sources are in `docs/venues/`.
