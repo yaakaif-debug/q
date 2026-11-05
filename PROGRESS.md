@@ -17,7 +17,7 @@
 | M0 | `claude/lucid-mccarthy-gx3vbm` | `main` | #1 | готов, ждёт слияния |
 | M1 | `claude/m1-scanner` | M0 | #2 | код готов, PR открыт |
 | M2 | `claude/m2-execution` | M1 | #3 | код готов, PR открыт |
-| M3 | `claude/m3-live-hl-lighter` | M2 | — | не начат |
+| M3 | `claude/m3-live-hl-lighter` | M2 | #4 | код готов, PR открыт |
 | M4 | `claude/m4-aster-ramp` | M3 | — | не начат |
 
 ## План по этапам
@@ -98,21 +98,31 @@
 - Отложено: горячая перезагрузка порогов (`spread-ctl reload`), автоматическая перебалансировка
   маржи между дексами S2 (сейчас — оповещение), цена ликвидации в paper (симулятор её не считает).
 
-### M3 — следующий шаг
+### M3 — готово (код и офлайн-тесты)
 
-Ветка `claude/m3-live-hl-lighter` от `claude/m2-execution`. План:
+- Режим `live` (`AVAILABLE_MODES`), защита `check_live_gate`: `engine.mode = "live"` и флаги
+  `run --live --i-understand-real-money` (или `--dry-run`); иначе отказ запуска.
+- `trading_enabled = true` разрешён для Hyperliquid и Lighter (по умолчанию `false`); Aster — с M4.
+- `src/live.rs`: адаптеры по семействам, команды в задачах tokio с тайм-аутом, приватные потоки,
+  снимки для сверки, реестр метаданных, SIGTERM со снятием post-only, состояние `engine_state_live`.
+- `live --dry-run`: paper-движок + подпись каждой команды адаптером без отправки.
+- Ступень `[stage]` ($5000, 2 пары) — в риске и в бюджете размера.
+- `config/live.toml`, `ops/systemd/spread-hunter-live.service`, `docs/live.md`.
+- Тесты: защита флагов, наложение live, сквозной тест оболочки live против симулятора.
+- Не делалось (по правилам): dry-run, selftest и 14 дней live — запускает оператор.
 
-1. Режим `live` в `config.rs` (`AVAILABLE_MODES` + проверка: `engine.mode = "live"` требует флагов
-   `--live --i-understand-real-money` у `spread-hunter run`; без них — отказ с понятной ошибкой).
-   Снять запрет `trading_enabled = true` в `venues.*.validate()` для Hyperliquid и Lighter
-   (Aster — только в M4), значение по умолчанию остаётся `false`.
-2. Оболочка live (`src/live.rs`): движок + `Arc<dyn Execution>` по семействам; команды движка
-   исполняются в задачах tokio, результаты возвращаются как `ExecInput` по каналу; приватные потоки;
-   снимки позиций и балансов по расписанию `reconcile_every_s`; общий `MetaRegistry` из событий
-   метаданных; старт только после сверки (уже в движке).
-3. `live --dry-run`: адаптеры с `dry_run = true` (подписывают и журналируют, не отправляют),
-   исполнение — симулятор (как paper), чтобы движок жил.
-4. Ступень M3: `StageCaps { max_capital_usd: 5000, max_pairs: 2 }` из `config/live.toml`;
-   только Hyperliquid (ядро + HIP-3) и Lighter.
-5. `config/live.toml` (наложение), systemd unit для live, инструкции оператору.
-6. Тесты: live-оболочка против `SimExecution` (как адаптера), отказ флагов, dry-run.
+### M4 — следующий шаг
+
+Ветка `claude/m4-aster-ramp` от `claude/m3-live-hl-lighter`. План:
+
+1. Aster в live: снять запрет `trading_enabled` в `sh-venue-aster::config`, добавить Aster в
+   `build_execs` и `engine_settings(Live)`.
+2. Ступени капитала $25k → $50k → $100k: `[stage] step = 1|2|3` (или явные значения) и проверка
+   «14 чистых дней» — ступень повышает оператор, движок только показывает метрики и не даёт
+   превысить текущую ступень.
+3. `spread-ctl rebalance plan`: планировщик перебалансировки (`sh-portfolio::rebalance`) — по
+   балансам и марже площадок, лимиту `max_in_transit_pct`, без вывода с Lighter для срочной маржи;
+   выдаёт неподписанные данные переводов для оператора (JSON), ничего не подписывает.
+4. `spread-ctl export --year 2026`: CSV журнала (заполнения, фандинг, комиссии, переводы) в USD,
+   опционально в валюту отчёта по курсу из файла.
+5. Документация, PROGRESS.md, CLAUDE.md, проверки, PR с базой `claude/m3-live-hl-lighter`.

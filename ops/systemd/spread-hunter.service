@@ -1,4 +1,4 @@
-# Демон spread-hunter (режим из config: record, scan; paper и live — с M2/M3).
+# Демон spread-hunter (режим из config: record, scan, paper). Live — отдельный unit spread-hunter-live.service.
 # Установка и ключи — см. README.md.
 [Unit]
 Description=spread-hunter (mode from config)

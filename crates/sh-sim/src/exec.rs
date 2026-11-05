@@ -61,6 +61,28 @@ impl SimExecution {
         result.ok_or(ExecError::Timeout)
     }
 
+    /// Событие рынка в общий симулятор; заполнения и фандинг уходят в приватный поток
+    /// (как у настоящей площадки).
+    pub fn on_md(&self, ev: &sh_venue_api::MdEvent) {
+        let out = match self.core.lock() {
+            Ok(mut c) => c.on_md(ev),
+            Err(_) => return,
+        };
+        let tx = self.events.lock().ok().and_then(|g| g.clone());
+        for o in out {
+            if let ExecInput::Event(ev) = o {
+                if let ExecEvent::Funding(f) = &ev
+                    && let Ok(mut g) = self.funding.lock()
+                {
+                    g.push(f.clone());
+                }
+                if let Some(tx) = &tx {
+                    let _ = tx.try_send(ev);
+                }
+            }
+        }
+    }
+
     fn core(&self) -> Result<std::sync::MutexGuard<'_, SimCore>, ExecError> {
         self.core.lock().map_err(|_| ExecError::Transport("sim lock poisoned".into()))
     }

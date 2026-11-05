@@ -75,7 +75,7 @@ impl AsterConfig {
     /// Проверка настроек.
     pub fn validate(&self) -> Result<(), String> {
         if self.trading_enabled {
-            return Err("venues.aster.trading_enabled must be false in M0".into());
+            return Err("venues.aster.trading_enabled must be false until M4".into());
         }
         if self.streams_per_connection < 2 || self.streams_per_connection > 200 {
             return Err("venues.aster.streams_per_connection must be in 2..=200".into());

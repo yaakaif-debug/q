@@ -1,0 +1,30 @@
+# Наложение для live (M3): spread-hunter --config config/default.toml --overlay config/live.toml
+#   run --live --i-understand-real-money
+# Проверка без отправки ордеров: ... run --live --dry-run
+# Торговля включается на площадке только после её selftest: trading_enabled = true.
+
+[engine]
+mode = "live"
+
+[venues.hyperliquid]
+trading_enabled = false   # true — после selftest на Hyperliquid
+
+[venues.lighter]
+trading_enabled = false   # true — после selftest на Lighter
+
+# Aster в live — с M4: здесь trading_enabled = true отклоняется проверкой конфига.
+
+[database]
+# отдельная база: состояние live не смешивается с paper
+path = "data/state/live.sqlite"
+
+[stage]
+# M3: не больше $5000 капитала в парах и не больше 2 пар
+max_capital_usd = 5000
+max_pairs = 2
+
+[secrets]
+source = "credential:secrets"
+
+[telegram]
+enabled = true

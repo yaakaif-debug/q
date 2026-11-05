@@ -84,9 +84,7 @@ impl Default for HyperliquidConfig {
 impl HyperliquidConfig {
     /// Проверка настроек.
     pub fn validate(&self) -> Result<(), String> {
-        if self.trading_enabled {
-            return Err("venues.hyperliquid.trading_enabled must be false in M0".into());
-        }
+        // trading_enabled = true разрешено с M3; по умолчанию false, торговля — только в live
         if self.dexes != "auto" {
             return Err("venues.hyperliquid.dexes: only \"auto\" is supported (discovered from perpDexs)".into());
         }
@@ -126,9 +124,9 @@ mod tests {
     }
 
     #[test]
-    fn rejects_trading_and_static_dex_lists() {
+    fn allows_trading_flag_rejects_static_dex_lists() {
         let c = HyperliquidConfig { trading_enabled: true, ..HyperliquidConfig::default() };
-        assert!(c.validate().is_err());
+        assert!(c.validate().is_ok());
         let c = HyperliquidConfig { dexes: "xyz,flx".into(), ..HyperliquidConfig::default() };
         assert!(c.validate().is_err());
         let c = HyperliquidConfig { subs_per_connection: 50, ..HyperliquidConfig::default() };
