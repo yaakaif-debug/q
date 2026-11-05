@@ -230,14 +230,54 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let p = dir.join("bbo.parquet");
         let rows = vec![
-            BboRow { ts_s: 1, venue: "aster".into(), symbol: "BTCUSDT".into(), bid: Some(1.0), bid_qty: Some(2.0), ask: None, ask_qty: None },
-            BboRow { ts_s: 2, venue: "aster".into(), symbol: "BTCUSDT".into(), bid: Some(1.5), bid_qty: Some(2.0), ask: Some(2.0), ask_qty: Some(1.0) },
+            BboRow {
+                ts_s: 1,
+                venue: "aster".into(),
+                symbol: "BTCUSDT".into(),
+                bid: Some(1.0),
+                bid_qty: Some(2.0),
+                ask: None,
+                ask_qty: None,
+            },
+            BboRow {
+                ts_s: 2,
+                venue: "aster".into(),
+                symbol: "BTCUSDT".into(),
+                bid: Some(1.5),
+                bid_qty: Some(2.0),
+                ask: Some(2.0),
+                ask_qty: Some(1.0),
+            },
         ];
         write_bbo(&p, &rows).unwrap();
         let r = SerializedFileReader::new(File::open(&p).unwrap()).unwrap();
         assert_eq!(r.metadata().file_metadata().num_rows(), 2);
-        write_funding(&dir.join("f.parquet"), &[FundingRow { ts_ms: 1, venue: "lighter".into(), symbol: "ETH".into(), kind: "settled".into(), rate: 0.0001, interval_h: Some(1.0), next_ms: None }]).unwrap();
-        write_book_levels(&dir.join("b.parquet"), &[BookLevelRow { ts_s: 1, venue: "hyperliquid".into(), symbol: "BTC".into(), side: "bid".into(), level: 0, px: 1.0, qty: 1.0 }]).unwrap();
+        write_funding(
+            &dir.join("f.parquet"),
+            &[FundingRow {
+                ts_ms: 1,
+                venue: "lighter".into(),
+                symbol: "ETH".into(),
+                kind: "settled".into(),
+                rate: 0.0001,
+                interval_h: Some(1.0),
+                next_ms: None,
+            }],
+        )
+        .unwrap();
+        write_book_levels(
+            &dir.join("b.parquet"),
+            &[BookLevelRow {
+                ts_s: 1,
+                venue: "hyperliquid".into(),
+                symbol: "BTC".into(),
+                side: "bid".into(),
+                level: 0,
+                px: 1.0,
+                qty: 1.0,
+            }],
+        )
+        .unwrap();
         write_oi(&dir.join("o.parquet"), &[]).unwrap();
         let r = SerializedFileReader::new(File::open(dir.join("o.parquet")).unwrap()).unwrap();
         assert_eq!(r.metadata().file_metadata().num_rows(), 0);

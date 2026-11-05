@@ -1,10 +1,12 @@
-# Конфигурация M0: только запись рыночных данных. Неизвестные ключи — ошибка.
+# Конфигурация spread-hunter. Неизвестные ключи — ошибка.
 # Наложение окружения: --overlay config/live.toml; переменные SH_<SECTION>__<KEY>.
 
 [engine]
-mode = "record"            # в M0 доступен только record
+mode = "scan"              # record | scan (M1); paper (M2) и live (M3) появятся в следующих этапах
+equity_reserve_pct = 15    # резерв капитала вне площадок, %
 
 [recorder]
+enabled = true             # сырые записи пишутся в любом режиме (нужны для повтора и бэктеста)
 dir = "data/raw"           # data/raw/<venue>/<YYYY-MM-DD>/<venue>-<YYYY-MM-DD>T<HH>.jsonl.zst
 zstd_level = 3
 flush_interval_ms = 1000   # при аварии теряется не больше этого
@@ -86,3 +88,88 @@ funding_history_hours = 168
 max_connection_age_secs = 84600 # 23.5 ч: площадка рвёт соединения через 24 ч
 ping_secs = 120
 idle_timeout_secs = 60
+
+[scanner]
+interval_secs = 60
+notional_tiers_usd = [10000, 50000, 100000]
+target_roc_pct = 15                 # для колонки «нужный чистый спред»
+report_dir = "reports"
+telegram_summary = true
+shadow_enabled = true
+shadow_capital_usd = 100000
+suggestions_path = "config/symbols.suggested.toml"
+
+[strategy.s1_funding_carry]
+enabled = true
+min_gross_apr = 15.0
+min_net_apr = 12.0
+exit_apr = 3.0
+max_breakeven_hours = 72
+k_settlements = 6
+m_intervals = 3
+switch_margin_apr = 5.0
+expected_hold_hours = 168
+leverage = 3.0
+child_usd = 5000
+hedge_timeout_ms = 1500
+hedge_retries = 2
+edge_bps = 1.0
+reprice_bps = 2.0
+max_slip_bps = 15.0
+delta_tolerance_pct = 0.5
+rebalance_margin_ratio = 0.5
+
+[strategy.s2_cross_dex]
+enabled = true
+min_net_apr = 10.0
+session_guard_min = 60
+
+[costs]
+maker_first = true
+unwind_spread_multiplier = 1.5
+rebalance_usd_s1 = 4.0              # UNVERIFIED: ~$1 за вывод с HL плюс газ
+rebalance_usd_s2 = 0.0
+collateral_conversion_bps = 2.0     # UNVERIFIED: конвертация USDC↔USDH/USDE/USDT0 на споте HL
+
+[fees]
+# Ставки уровня аккаунта, %. Hyperliquid — Tier 0 ядра (HIP-3 масштабируется по метаданным);
+# Lighter — standard (0/0) или premium (ставки рынка из метаданных); Aster — только приватно (UNVERIFIED).
+hyperliquid = { maker_pct = 0.015, taker_pct = 0.045 }
+lighter_account_tier = "standard"
+lighter_premium = { maker_pct = 0.004, taker_pct = 0.028 }
+aster = { maker_pct = 0.0, taker_pct = 0.04 }
+
+[risk]
+max_platform_share_pct = { hyperliquid = 60, lighter = 40, aster = 40 }
+max_s2_share_pct = 50
+max_pair_share_pct = 25
+max_leverage_leg = 3.0
+max_leverage_lighter = 2.0
+min_liq_distance_pct = 25
+liq_distance_adr_mult = 3
+max_unhedged_usd = 2000
+max_net_delta_usd = 1000
+max_in_transit_pct = 25
+daily_loss_limit_pct = 1.0
+max_drawdown_pct = 3.0
+md_stale_ms = 2000
+reconcile_every_s = 10
+min_oi_usd = 5000000
+min_listing_age_h = 72
+max_stable_depeg_pct = 0.3
+max_mark_divergence_pct = 2.0
+
+[symbols]
+path = "config/symbols.toml"
+
+[database]
+path = "data/state/state.sqlite"
+
+[secrets]
+# none | credential:<name> (systemd LoadCredentialEncrypted) | command:<cmd> | file:<path> (права 600, только тест)
+source = "none"
+
+[telegram]
+enabled = false            # токен и чат — в секретах ([telegram] bot_token, chat_id)
+dedupe_secs = 300
+per_minute = 20

@@ -81,9 +81,7 @@ impl ShadowPosition {
     pub fn unrealized_basis(&self, market: &MarketState) -> Usd {
         let mid = |k: &InstrumentKey| market.get(k).and_then(|s| s.mid());
         match (mid(&self.short), mid(&self.long)) {
-            (Some(s), Some(l)) => {
-                Usd(self.qty.0 * ((l.0 - self.entry_mid.1.0) - (s.0 - self.entry_mid.0.0)))
-            }
+            (Some(s), Some(l)) => Usd(self.qty.0 * ((l.0 - self.entry_mid.1.0) - (s.0 - self.entry_mid.0.0))),
             _ => Usd::ZERO,
         }
     }
@@ -266,17 +264,16 @@ impl ShadowPortfolio {
         if drawdown_hit || now_ms < self.entries_blocked_until_ms {
             return out;
         }
-        let mut candidates: Vec<&PairEval> = evals
-            .iter()
-            .filter(|e| e.entry_ok && !self.positions.contains_key(&e.pair.id()))
-            .collect();
+        let mut candidates: Vec<&PairEval> =
+            evals.iter().filter(|e| e.entry_ok && !self.positions.contains_key(&e.pair.id())).collect();
         candidates.sort_by_key(|e| std::cmp::Reverse(net_of(e)));
         for cand in candidates {
             let equity = self.equity(market);
             // одна позиция на инструмент: ноги разных пар не должны сливаться
-            let busy = self.positions.values().any(|p| {
-                [&p.short, &p.long].iter().any(|k| **k == cand.pair.a || **k == cand.pair.b)
-            });
+            let busy = self
+                .positions
+                .values()
+                .any(|p| [&p.short, &p.long].iter().any(|k| **k == cand.pair.a || **k == cand.pair.b));
             if busy {
                 continue;
             }
@@ -301,7 +298,9 @@ impl ShadowPortfolio {
             self.day_start_equity = equity;
         }
         let loss = self.day_start_equity.0 - equity.0;
-        if self.day_start_equity.0 > Decimal::ZERO && loss / self.day_start_equity.0 > pct(params.risk.daily_loss_limit_pct) {
+        if self.day_start_equity.0 > Decimal::ZERO
+            && loss / self.day_start_equity.0 > pct(params.risk.daily_loss_limit_pct)
+        {
             self.entries_blocked_until_ms = self.entries_blocked_until_ms.max(now_ms + DAY_MS);
         }
     }
@@ -331,7 +330,13 @@ impl ShadowPortfolio {
         Some(SizeBudget { pair_capital: Usd(pair_capital), room_margin: [room(&e.pair.a), room(&e.pair.b)] })
     }
 
-    fn open(&mut self, e: &PairEval, market: &MarketState, params: &ShadowParams, now_ms: i64) -> Option<Vec<LedgerEntry>> {
+    fn open(
+        &mut self,
+        e: &PairEval,
+        market: &MarketState,
+        params: &ShadowParams,
+        now_ms: i64,
+    ) -> Option<Vec<LedgerEntry>> {
         let size = e.size?;
         let at = e.at_size?;
         let cost = at.cost?;
@@ -396,7 +401,11 @@ impl ShadowPortfolio {
                 None => {
                     // стакана нет или он тонкий: консервативно — комиссии тейкера и 50 bp проскальзывания
                     let fees = |k: &InstrumentKey| {
-                        market.get(k).and_then(|s| s.meta.as_ref()).map(|m| params.fees.resolve(m).taker).unwrap_or_default()
+                        market
+                            .get(k)
+                            .and_then(|s| s.meta.as_ref())
+                            .map(|m| params.fees.resolve(m).taker)
+                            .unwrap_or_default()
                     };
                     let f = now_notional.0 * (fees(&pos.short) + fees(&pos.long));
                     entries.push(entry(now_ms, id, LedgerKind::Fee, Usd(-f)));

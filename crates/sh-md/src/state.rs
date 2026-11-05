@@ -289,7 +289,13 @@ mod tests {
     use sh_venue_api::FundingUpdate;
 
     fn ev(kind: MdEventKind) -> MdEvent {
-        MdEvent { venue: VenueKey::hyperliquid("xyz"), symbol: "xyz:NVDA".into(), recv: RecvTs { wall_ns: 5_000_000, mono_ns: 1 }, venue_ts_ms: None, kind }
+        MdEvent {
+            venue: VenueKey::hyperliquid("xyz"),
+            symbol: "xyz:NVDA".into(),
+            recv: RecvTs { wall_ns: 5_000_000, mono_ns: 1 },
+            venue_ts_ms: None,
+            kind,
+        }
     }
 
     fn lvl(px: Decimal, q: Decimal) -> Level {
@@ -310,11 +316,21 @@ mod tests {
     #[test]
     fn books_and_invalidation() {
         let mut m = MarketState::new();
-        m.apply(&ev(MdEventKind::BookDelta { bids: vec![lvl(dec!(1), dec!(1))], asks: vec![], first_seq: 1, last_seq: 1, prev_seq: None }));
+        m.apply(&ev(MdEventKind::BookDelta {
+            bids: vec![lvl(dec!(1), dec!(1))],
+            asks: vec![],
+            first_seq: 1,
+            last_seq: 1,
+            prev_seq: None,
+        }));
         let k = InstrumentKey::new(VenueKey::hyperliquid("xyz"), "xyz:NVDA");
         // дельта до снимка игнорируется
         assert!(m.get(&k).unwrap().book.is_empty());
-        m.apply(&ev(MdEventKind::BookSnapshot { bids: vec![lvl(dec!(99), dec!(1))], asks: vec![lvl(dec!(101), dec!(1))], seq: None }));
+        m.apply(&ev(MdEventKind::BookSnapshot {
+            bids: vec![lvl(dec!(99), dec!(1))],
+            asks: vec![lvl(dec!(101), dec!(1))],
+            seq: None,
+        }));
         assert_eq!(m.get(&k).unwrap().mid(), Some(Px(dec!(100))));
         m.apply(&ev(MdEventKind::BookInvalidated));
         let st = m.get(&k).unwrap();
@@ -324,7 +340,13 @@ mod tests {
     #[test]
     fn settlements_dedupe_and_need_interval() {
         let mut m = MarketState::new();
-        let settled = |ts| MdEventKind::Funding(FundingUpdate { settled_rate: Some(dec!(0.0001)), settled_at_ms: Some(ts), ..FundingUpdate::default() });
+        let settled = |ts| {
+            MdEventKind::Funding(FundingUpdate {
+                settled_rate: Some(dec!(0.0001)),
+                settled_at_ms: Some(ts),
+                ..FundingUpdate::default()
+            })
+        };
         // без интервала расчёт не учитывается: APR не из чего считать
         assert!(m.apply(&ev(settled(1000))).is_none());
         m.apply(&ev(MdEventKind::Funding(FundingUpdate { interval_hours: Some(dec!(1)), ..FundingUpdate::default() })));
@@ -349,7 +371,12 @@ mod tests {
     fn oi_usd_from_base_and_mark() {
         let mut m = MarketState::new();
         m.apply(&ev(MdEventKind::OpenInterest { base: Some(Qty(dec!(10))), usd: None }));
-        m.apply(&ev(MdEventKind::Mark { mark: Some(Px(dec!(150))), index: None, oracle: Some(Px(dec!(149))), mid: None }));
+        m.apply(&ev(MdEventKind::Mark {
+            mark: Some(Px(dec!(150))),
+            index: None,
+            oracle: Some(Px(dec!(149))),
+            mid: None,
+        }));
         let st = m.get(&InstrumentKey::new(VenueKey::hyperliquid("xyz"), "xyz:NVDA")).unwrap();
         assert_eq!(st.open_interest_usd(), Some(Usd(dec!(1500))));
         assert_eq!(st.funding_price(Exchange::Hyperliquid), Some(Px(dec!(149))));

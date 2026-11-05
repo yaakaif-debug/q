@@ -179,10 +179,7 @@ pub fn suggest_mappings(market: &MarketState, map: &SymbolMap) -> Vec<(String, V
             groups.entry(b).or_default().push(key.clone());
         }
     }
-    groups
-        .into_iter()
-        .filter(|(_, v)| v.iter().map(|k| k.venue.clone()).collect::<BTreeSet<_>>().len() >= 2)
-        .collect()
+    groups.into_iter().filter(|(_, v)| v.iter().map(|k| k.venue.clone()).collect::<BTreeSet<_>>().len() >= 2).collect()
 }
 
 /// Текст TOML с предложениями для ручного переноса в `config/symbols.toml`.
@@ -234,7 +231,10 @@ us_equity = ["MON 13:30", "FRI 20:00"]
         assert!(matches!(SymbolMap::from_toml_str(dup), Err(SymbolsError::Duplicate(..))));
         let cal = "[[underlying]]\nid='A'\nmembers=['lighter/X']\nsession='nope'\n";
         assert!(matches!(SymbolMap::from_toml_str(cal), Err(SymbolsError::UnknownCalendar(..))));
-        assert!(matches!(SymbolMap::from_toml_str("[[underlying]]\nid='A'\nmembers=['x']\n"), Err(SymbolsError::BadMember(_))));
+        assert!(matches!(
+            SymbolMap::from_toml_str("[[underlying]]\nid='A'\nmembers=['x']\n"),
+            Err(SymbolsError::BadMember(_))
+        ));
         assert!(SymbolMap::load(Path::new("/nonexistent/symbols.toml")).unwrap().underlyings().is_empty());
     }
 
@@ -252,11 +252,23 @@ us_equity = ["MON 13:30", "FRI 20:00"]
             max_leverage: None,
             margin_mode: None,
             funding_interval_hours: None,
-            fees: FeeInfo { maker: None, taker: None, source: FeeSource::AccountRequired, deployer_fee_scale: None, growth_mode: None },
+            fees: FeeInfo {
+                maker: None,
+                taker: None,
+                source: FeeSource::AccountRequired,
+                deployer_fee_scale: None,
+                growth_mode: None,
+            },
             status: InstrumentStatus::Active,
             listed_at_ms: None,
         };
-        MdEvent { venue, symbol: symbol.into(), recv: RecvTs { wall_ns: 0, mono_ns: 0 }, venue_ts_ms: None, kind: MdEventKind::Metadata(Box::new(m)) }
+        MdEvent {
+            venue,
+            symbol: symbol.into(),
+            recv: RecvTs { wall_ns: 0, mono_ns: 0 },
+            venue_ts_ms: None,
+            kind: MdEventKind::Metadata(Box::new(m)),
+        }
     }
 
     #[test]

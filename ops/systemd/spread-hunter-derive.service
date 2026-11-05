@@ -1,0 +1,16 @@
+# Производные Parquet за вчерашние сутки UTC (запускается таймером).
+[Unit]
+Description=spread-hunter nightly Parquet derivation
+
+[Service]
+Type=oneshot
+User=spreadhunter
+Group=spreadhunter
+WorkingDirectory=/opt/spread-hunter
+ExecStart=/opt/spread-hunter/bin/spread-hunter derive --raw /opt/spread-hunter/data/raw --out /opt/spread-hunter/data/parquet
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/spread-hunter/data

@@ -175,7 +175,13 @@ mod tests {
     }
 
     fn rec(source: RawSource, conn: &str, payload: String) -> RawRecord {
-        RawRecord { exchange: Exchange::Hyperliquid, source, conn: conn.into(), recv: RecvTs { wall_ns: 1, mono_ns: 1 }, payload }
+        RawRecord {
+            exchange: Exchange::Hyperliquid,
+            source,
+            conn: conn.into(),
+            recv: RecvTs { wall_ns: 1, mono_ns: 1 },
+            payload,
+        }
     }
 
     fn rest(body: &str, payload: String) -> RawRecord {
@@ -210,7 +216,13 @@ mod tests {
     fn funding_history_infers_interval() {
         let mut r = HlReplay::new();
         let mut out = Vec::new();
-        r.feed(&rest(r#"{"coin":"xyz:NVDA","startTime":0,"type":"fundingHistory"}"#, fx("rest_funding_history_xyz_nvda.json")), &mut out);
+        r.feed(
+            &rest(
+                r#"{"coin":"xyz:NVDA","startTime":0,"type":"fundingHistory"}"#,
+                fx("rest_funding_history_xyz_nvda.json"),
+            ),
+            &mut out,
+        );
         assert_eq!(out.len(), 4);
         let MdEventKind::Funding(f) = &out[3].kind else { panic!() };
         assert_eq!(f.interval_hours, Some(Decimal::ONE));

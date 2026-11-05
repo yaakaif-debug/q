@@ -1,0 +1,62 @@
+# Сопоставление инструментов каноническим базовым активам (SPEC.md, S1 «Pair eligibility»).
+# Сканер и стратегии торгуют только пары из этого файла. Новые совпадения сканер
+# предлагает в config/symbols.suggested.toml — переносите их сюда только после проверки,
+# что инструменты действительно на один базовый актив (одинаковый размер контракта и индекс).
+#
+# Ключ инструмента: "<площадка>/<символ>", площадка HIP-3 — "hyperliquid:<dex>".
+# Стартовый набор составлен по метаданным площадок на 2026-10-29; для Aster взяты только
+# контракты с маржой в USDT (есть также USDC, USD1 и U).
+
+[[underlying]]
+id = "BTC"
+members = ["hyperliquid/BTC", "lighter/BTC", "aster/BTCUSDT"]
+
+[[underlying]]
+id = "ETH"
+members = ["hyperliquid/ETH", "lighter/ETH", "aster/ETHUSDT"]
+
+[[underlying]]
+id = "SOL"
+members = ["hyperliquid/SOL", "lighter/SOL", "aster/SOLUSDT"]
+
+[[underlying]]
+id = "HYPE"
+members = ["hyperliquid/HYPE", "lighter/HYPE", "aster/HYPEUSDT"]
+
+[[underlying]]
+id = "XRP"
+members = ["hyperliquid/XRP", "lighter/XRP", "aster/XRPUSDT"]
+
+[[underlying]]
+id = "DOGE"
+members = ["hyperliquid/DOGE", "lighter/DOGE", "aster/DOGEUSDT"]
+
+# Акции США: несколько HIP-3 дексов (S2) и площадки S1. Оракулы и сессии у дексов
+# разные — проверьте спецификации контрактов перед одобрением (UNVERIFIED).
+[[underlying]]
+id = "NVDA"
+members = ["hyperliquid:xyz/xyz:NVDA", "hyperliquid:io/io:NVDA", "lighter/NVDA", "aster/NVDAUSDT"]
+session = "us_equity"
+
+[[underlying]]
+id = "TSLA"
+members = ["hyperliquid:xyz/xyz:TSLA", "lighter/TSLA", "aster/TSLAUSDT"]
+session = "us_equity"
+
+[[underlying]]
+id = "AAPL"
+members = ["hyperliquid:xyz/xyz:AAPL", "lighter/AAPL", "aster/AAPLUSDT"]
+session = "us_equity"
+
+[calendars]
+# Моменты смены сессии, UTC. Нью-Йорк: открытие 9:30, закрытие 16:00 по местному времени.
+# Значения ниже — для зимнего времени (EST, UTC−5, с 1 ноября 2026 по 14 марта 2027);
+# летом (EDT) сдвиньте на час раньше: 13:30 и 20:00. Выходные: закрытие в пятницу,
+# открытие в понедельник. Как каждый декс переоценивает акции вне сессии — UNVERIFIED.
+us_equity = [
+    "MON 14:30", "MON 21:00",
+    "TUE 14:30", "TUE 21:00",
+    "WED 14:30", "WED 21:00",
+    "THU 14:30", "THU 21:00",
+    "FRI 14:30", "FRI 21:00",
+]

@@ -18,6 +18,8 @@ use crate::layout::{FileHeader, RecordLine, hour_path, hour_start_secs};
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields, default)]
 pub struct RecorderConfig {
+    /// Писать сырые записи (в любом режиме; для `record` обязательно).
+    pub enabled: bool,
     /// Каталог сырых записей.
     pub dir: PathBuf,
     /// Уровень сжатия zstd.
@@ -35,6 +37,7 @@ pub struct RecorderConfig {
 impl Default for RecorderConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             dir: PathBuf::from("data/raw"),
             zstd_level: 3,
             flush_interval_ms: 1000,

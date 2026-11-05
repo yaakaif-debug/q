@@ -26,7 +26,8 @@ pub fn breakeven_hours(cost: Usd, s: Decimal, notional: Usd) -> Option<Decimal> 
 
 /// Капитал под пару: маржа обеих ног и резерв `reserve_frac` от итогового капитала.
 pub fn capital_for(notional: Usd, lev_a: Decimal, lev_b: Decimal, reserve_frac: Decimal) -> Option<Usd> {
-    if lev_a <= Decimal::ZERO || lev_b <= Decimal::ZERO || reserve_frac < Decimal::ZERO || reserve_frac >= Decimal::ONE {
+    if lev_a <= Decimal::ZERO || lev_b <= Decimal::ZERO || reserve_frac < Decimal::ZERO || reserve_frac >= Decimal::ONE
+    {
         return None;
     }
     let margin = notional.0 / lev_a + notional.0 / lev_b;

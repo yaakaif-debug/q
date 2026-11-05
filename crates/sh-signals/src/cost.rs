@@ -140,18 +140,22 @@ mod tests {
 
     fn book(mid: Decimal, half_spread: Decimal, depth_each: Decimal, levels: usize) -> OrderBook {
         let mut b = OrderBook::new();
-        let bids: Vec<Level> = (0..levels)
-            .map(|i| Level::new(Px(mid - half_spread - Decimal::from(i as u64)), Qty(depth_each)))
-            .collect();
-        let asks: Vec<Level> = (0..levels)
-            .map(|i| Level::new(Px(mid + half_spread + Decimal::from(i as u64)), Qty(depth_each)))
-            .collect();
+        let bids: Vec<Level> =
+            (0..levels).map(|i| Level::new(Px(mid - half_spread - Decimal::from(i as u64)), Qty(depth_each))).collect();
+        let asks: Vec<Level> =
+            (0..levels).map(|i| Level::new(Px(mid + half_spread + Decimal::from(i as u64)), Qty(depth_each))).collect();
         b.replace(&bids, &asks);
         b
     }
 
     fn leg(b: &OrderBook, side: Side, maker: Decimal, taker: Decimal) -> LegCostInput<'_> {
-        LegCostInput { book: b, fees: FeeRates { maker, taker }, entry_side: side, leverage: dec!(3), needs_conversion: false }
+        LegCostInput {
+            book: b,
+            fees: FeeRates { maker, taker },
+            entry_side: side,
+            leverage: dec!(3),
+            needs_conversion: false,
+        }
     }
 
     #[test]
@@ -159,7 +163,14 @@ mod tests {
         let a = book(dec!(100), dec!(0.5), dec!(1000), 5);
         let b = book(dec!(100), dec!(0.5), dec!(1000), 5);
         let p = CostParams { maker_first: false, unwind_spread_multiplier: dec!(1), ..CostParams::default() };
-        let c = round_trip_cost(&leg(&a, Side::Sell, dec!(0), dec!(0.0004)), &leg(&b, Side::Buy, dec!(0), dec!(0.0004)), Usd(dec!(10000)), Usd(dec!(4)), &p).unwrap();
+        let c = round_trip_cost(
+            &leg(&a, Side::Sell, dec!(0), dec!(0.0004)),
+            &leg(&b, Side::Buy, dec!(0), dec!(0.0004)),
+            Usd(dec!(10000)),
+            Usd(dec!(4)),
+            &p,
+        )
+        .unwrap();
         // 100 контрактов, полспреда 0.5 на каждой ноге и в каждую сторону: 4 * 50 = 200
         assert_eq!(c.qty, Qty(dec!(100)));
         assert_eq!(c.fees_in, Usd(dec!(8)));
@@ -175,7 +186,14 @@ mod tests {
         let b = book(dec!(100), dec!(0.5), dec!(1000), 5);
         let p = CostParams { unwind_spread_multiplier: dec!(1), rebalance_usd_s1: dec!(0), ..CostParams::default() };
         // длинная нога дешевле как мейкер
-        let c = round_trip_cost(&leg(&a, Side::Sell, dec!(0.0002), dec!(0.0004)), &leg(&b, Side::Buy, dec!(0), dec!(0.0004)), Usd(dec!(10000)), Usd::ZERO, &p).unwrap();
+        let c = round_trip_cost(
+            &leg(&a, Side::Sell, dec!(0.0002), dec!(0.0004)),
+            &leg(&b, Side::Buy, dec!(0), dec!(0.0004)),
+            Usd(dec!(10000)),
+            Usd::ZERO,
+            &p,
+        )
+        .unwrap();
         assert_eq!(c.maker_is_short, Some(false));
         assert_eq!(c.fees_in, Usd(dec!(4)));
         assert_eq!(c.slip_in, Usd(dec!(50)));
@@ -187,10 +205,20 @@ mod tests {
         let thin = book(dec!(100), dec!(0.5), dec!(1), 2);
         let deep = book(dec!(100), dec!(0.5), dec!(1000), 5);
         let p = CostParams { maker_first: false, ..CostParams::default() };
-        assert!(round_trip_cost(&leg(&thin, Side::Sell, dec!(0), dec!(0)), &leg(&deep, Side::Buy, dec!(0), dec!(0)), Usd(dec!(10000)), Usd::ZERO, &p).is_none());
+        assert!(
+            round_trip_cost(
+                &leg(&thin, Side::Sell, dec!(0), dec!(0)),
+                &leg(&deep, Side::Buy, dec!(0), dec!(0)),
+                Usd(dec!(10000)),
+                Usd::ZERO,
+                &p
+            )
+            .is_none()
+        );
         let mut conv = leg(&deep, Side::Sell, dec!(0), dec!(0));
         conv.needs_conversion = true;
-        let c = round_trip_cost(&conv, &leg(&deep, Side::Buy, dec!(0), dec!(0)), Usd(dec!(30000)), Usd::ZERO, &p).unwrap();
+        let c =
+            round_trip_cost(&conv, &leg(&deep, Side::Buy, dec!(0), dec!(0)), Usd(dec!(30000)), Usd::ZERO, &p).unwrap();
         // 2 * 2bp * 30000 / 3 = 4
         assert_eq!(c.conversion, Usd(dec!(4)));
     }

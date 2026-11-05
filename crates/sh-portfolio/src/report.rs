@@ -210,7 +210,9 @@ impl DailyReport {
         let start = shadow.day_start_equity.0;
         let days = Decimal::from((now_ms - shadow.started_ms).max(1)) / Decimal::from(86_400_000);
         let init = shadow.initial_capital.0;
-        let ann = |ret: Decimal, d: Decimal| if d > Decimal::ZERO { ret * Decimal::from(365) / d * Decimal::ONE_HUNDRED } else { Decimal::ZERO };
+        let ann = |ret: Decimal, d: Decimal| {
+            if d > Decimal::ZERO { ret * Decimal::from(365) / d * Decimal::ONE_HUNDRED } else { Decimal::ZERO }
+        };
         let positions = shadow
             .positions
             .iter()
@@ -239,8 +241,16 @@ impl DailyReport {
             slippage: sum(LedgerKind::Slippage).round_dp(2),
             transfers: sum(LedgerKind::Transfer).round_dp(2),
             basis: sum(LedgerKind::Basis).round_dp(2),
-            day_annualized_pct: if start > Decimal::ZERO { ann((end - start) / start, Decimal::ONE).round_dp(2) } else { Decimal::ZERO },
-            since_start_annualized_pct: if init > Decimal::ZERO { ann((end - init) / init, days).round_dp(2) } else { Decimal::ZERO },
+            day_annualized_pct: if start > Decimal::ZERO {
+                ann((end - start) / start, Decimal::ONE).round_dp(2)
+            } else {
+                Decimal::ZERO
+            },
+            since_start_annualized_pct: if init > Decimal::ZERO {
+                ann((end - init) / init, days).round_dp(2)
+            } else {
+                Decimal::ZERO
+            },
             days_since_start: days.round_dp(2),
             max_drawdown_pct: (shadow.max_drawdown * Decimal::ONE_HUNDRED).round_dp(2),
             positions,
@@ -275,7 +285,16 @@ impl DailyReport {
         for p in &self.positions {
             s.push_str(&format!(
                 "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |\n",
-                p.pair_id, p.kind, p.short, p.long, p.notional, p.capital, p.hours_held, p.funding, p.costs, p.unrealized_basis
+                p.pair_id,
+                p.kind,
+                p.short,
+                p.long,
+                p.notional,
+                p.capital,
+                p.hours_held,
+                p.funding,
+                p.costs,
+                p.unrealized_basis
             ));
         }
         s.push_str("\n## Лучшие возможности\n\n| Пара | Вид | Шорт | s сейчас, % | s EMA, % | s 7д, % | s_net, % | Безубыточность, ч | ROC, % | Нужно для цели, % | Вход | Причины |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n");
@@ -301,7 +320,8 @@ impl DailyReport {
 
     /// CSV позиций.
     pub fn positions_csv(&self) -> String {
-        let mut out = String::from("pair_id,kind,short,long,qty,notional,capital,hours_held,funding,costs,unrealized_basis\n");
+        let mut out =
+            String::from("pair_id,kind,short,long,qty,notional,capital,hours_held,funding,costs,unrealized_basis\n");
         for p in &self.positions {
             out.push_str(&format!(
                 "{},{},{},{},{},{},{},{},{},{},{}\n",

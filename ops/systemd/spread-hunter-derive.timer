@@ -1,0 +1,10 @@
+# Каждый день в 00:20 UTC — после закрытия последнего часового файла.
+[Unit]
+Description=Run spread-hunter Parquet derivation nightly
+
+[Timer]
+OnCalendar=*-*-* 00:20:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

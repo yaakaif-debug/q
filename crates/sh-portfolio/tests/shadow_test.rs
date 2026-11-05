@@ -118,7 +118,10 @@ fn opens_books_funding_and_exits() {
     // расчёт по длинной ноге HL с положительной ставкой — платим
     let hl = InstrumentKey::parse("hyperliquid/ETH").unwrap();
     w.b.settle(&hl, ts, dec!(0.000001));
-    let ns = sh_md::NewSettlement { key: hl.clone(), settlement: *w.b.market.get(&hl).unwrap().funding.last_settled().unwrap() };
+    let ns = sh_md::NewSettlement {
+        key: hl.clone(),
+        settlement: *w.b.market.get(&hl).unwrap().funding.last_settled().unwrap(),
+    };
     let paid = shadow.on_settlement(&ns, &w.b.market);
     assert!(paid[0].amount.0 < Decimal::ZERO);
     journal.extend(paid);

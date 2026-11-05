@@ -1,24 +1,19 @@
-//! `spread-hunter`: демон спред-движка. В M0 доступен только режим записи
-//! рыночных данных (`run` с `engine.mode = "record"`), выгрузка метаданных
-//! и проверка записей на разрывы.
-
-mod monitor;
+//! `spread-hunter`: демон спред-движка. Режимы из конфигурации (`run`), повтор
+//! сканера по записям, производные Parquet, выгрузка метаданных и проверка записей.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
-use anyhow::Context;
 use clap::{Parser, Subcommand};
-use sh_core::{Clock, Exchange, SystemClock};
-use sh_store::{FORMAT, FileHeader, Recorder};
-use sh_venue_api::{MarketDataVenue, ProxyConfig, Sinks, VenueError};
+use sh_core::SystemClock;
+use sh_venue_api::{MarketDataVenue, ProxyConfig, Sinks};
 use sh_venue_aster::AsterVenue;
 use sh_venue_hyperliquid::HyperliquidVenue;
 use sh_venue_lighter::LighterVenue;
-use tokio::sync::{mpsc, watch};
 
 use spread_hunter::config::AppConfig;
+use spread_hunter::replay_source::parse_time;
+use spread_hunter::runner::{self, install_crypto};
 
 #[derive(Parser)]
 #[command(name = "spread-hunter", version, about = "Delta-neutral spread engine (M0: market-data recorder)")]
@@ -35,7 +30,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Запуск в режиме из конфига (в M0 — только `record`).
+    /// Запуск в режиме из конфига (`record`, `scan`).
     Run,
     /// Загрузить и вывести нормализованные метаданные площадок (JSON).
     Metadata {
@@ -56,6 +51,33 @@ enum Cmd {
         /// Файл `.jsonl.zst`.
         path: PathBuf,
     },
+    /// Сканер и теневой портфель по записям (без сети, детерминированно).
+    Scan {
+        /// Каталог сырых записей.
+        #[arg(long)]
+        replay: PathBuf,
+        /// Начало: `YYYY-MM-DD` или RFC 3339 (UTC).
+        #[arg(long)]
+        from: String,
+        /// Конец (не включительно).
+        #[arg(long)]
+        to: String,
+        /// Каталог отчётов.
+        #[arg(long, default_value = "reports/replay")]
+        out: PathBuf,
+    },
+    /// Производные Parquet за сутки UTC (ночное задание).
+    Derive {
+        /// Каталог сырых записей.
+        #[arg(long, default_value = "data/raw")]
+        raw: PathBuf,
+        /// Каталог Parquet.
+        #[arg(long, default_value = "data/parquet")]
+        out: PathBuf,
+        /// Дата `YYYY-MM-DD`; по умолчанию — вчера (UTC).
+        #[arg(long)]
+        date: Option<String>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -63,144 +85,60 @@ fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Cmd::Inspect { paths, json } => inspect(&paths, json),
         Cmd::Dump { path } => dump(&path),
+        Cmd::Scan { replay, from, to, out } => {
+            let cfg = AppConfig::load(&cli.config, cli.overlay.as_deref())?;
+            init_cli_logging();
+            let (from, to) =
+                (parse_time(&from).map_err(anyhow::Error::msg)?, parse_time(&to).map_err(anyhow::Error::msg)?);
+            let s = runner::run_replay(&cfg, &replay, from, to, &out)?;
+            println!(
+                "records {} | daily reports {} | positions opened {} | final equity {} | max drawdown {}%",
+                s.records,
+                s.reports,
+                s.opened,
+                s.final_equity.round_dp(2),
+                (s.max_drawdown * rust_decimal::Decimal::ONE_HUNDRED).round_dp(2)
+            );
+            Ok(())
+        }
+        Cmd::Derive { raw, out, date } => {
+            init_cli_logging();
+            let day = match date {
+                Some(d) => parse_time(&d).map_err(anyhow::Error::msg)?,
+                None => {
+                    let now = chrono::Utc::now().timestamp_millis();
+                    now - now.rem_euclid(86_400_000) - 86_400_000
+                }
+            };
+            let s = spread_hunter::derive::derive_day(&raw, &out, day)?;
+            println!(
+                "{}: records {} | bbo {} | funding {} | book levels {} | oi {}",
+                s.out_dir.display(),
+                s.records,
+                s.bbo_rows,
+                s.funding_rows,
+                s.book_rows,
+                s.oi_rows
+            );
+            Ok(())
+        }
         cmd => {
             let cfg = AppConfig::load(&cli.config, cli.overlay.as_deref())?;
             let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
             rt.block_on(async move {
                 match cmd {
-                    Cmd::Run => run(cfg).await,
+                    Cmd::Run => runner::run_live(cfg).await,
                     Cmd::Metadata { venue } => metadata(cfg, &venue).await,
-                    Cmd::Inspect { .. } | Cmd::Dump { .. } => Ok(()),
+                    _ => Ok(()),
                 }
             })
         }
     }
 }
 
-fn install_crypto() {
-    // один провайдер rustls на процесс; повторная установка безвредна
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-}
-
-fn host_name() -> String {
-    std::env::var("HOSTNAME")
-        .ok()
-        .filter(|h| !h.is_empty())
-        .or_else(|| std::fs::read_to_string("/etc/hostname").ok().map(|s| s.trim().to_owned()))
-        .unwrap_or_else(|| "unknown".into())
-}
-
-async fn run(cfg: AppConfig) -> anyhow::Result<()> {
-    sh_obs::init_logging(&cfg.log).context("logging")?;
-    install_crypto();
-    sh_obs::init_metrics(&cfg.metrics).map_err(anyhow::Error::msg).context("metrics")?;
-    let proxy = cfg.network.proxy().map_err(anyhow::Error::msg)?;
-    if let Some(p) = &proxy {
-        tracing::warn!(proxy = %format!("{}:{}", p.host, p.port), "websocket traffic goes through an HTTP proxy");
-    }
-
-    let clock: Arc<dyn Clock> = Arc::new(SystemClock::new());
-    let start = clock.wall_ns();
-    let header = FileHeader {
-        format: FORMAT.into(),
-        session: format!("{start:x}-{}", std::process::id()),
-        host: host_name(),
-        session_start_wall_ns: start,
-        version: env!("CARGO_PKG_VERSION").into(),
-    };
-    tracing::info!(session = %header.session, dir = %cfg.recorder.dir.display(), "recorder starting");
-    let recorder = Recorder::start(cfg.recorder.clone(), header).context("recorder")?;
-
-    let (md_tx, md_rx) = mpsc::channel(65_536);
-    let sinks = Sinks::new(Some(recorder.sender()), Some(md_tx), clock.clone());
-    let (shutdown_tx, shutdown_rx) = watch::channel(false);
-    let monitor = tokio::spawn(monitor::run(md_rx, clock.clone()));
-
-    let mut venues = tokio::task::JoinSet::new();
-    let v = &cfg.venues;
-    if v.hyperliquid.enabled {
-        spawn_venue(&mut venues, HyperliquidVenue::new(v.hyperliquid.clone(), proxy.clone()), &sinks, &shutdown_rx);
-    }
-    if v.lighter.enabled {
-        spawn_venue(&mut venues, LighterVenue::new(v.lighter.clone(), proxy.clone()), &sinks, &shutdown_rx);
-    }
-    if v.aster.enabled {
-        spawn_venue(&mut venues, AsterVenue::new(v.aster.clone(), proxy.clone()), &sinks, &shutdown_rx);
-    }
-    drop(sinks);
-    if venues.is_empty() {
-        anyhow::bail!("no venues enabled");
-    }
-
-    let mut fatal: Option<anyhow::Error> = None;
-    tokio::select! {
-        _ = shutdown_signal() => tracing::info!("shutdown signal received"),
-        Some(res) = venues.join_next() => {
-            fatal = Some(match res {
-                Ok((ex, Ok(()))) => anyhow::anyhow!("venue {ex} stopped unexpectedly"),
-                Ok((ex, Err(e))) => anyhow::anyhow!("venue {ex} failed: {e}"),
-                Err(e) => anyhow::anyhow!("venue task panicked: {e}"),
-            });
-        }
-    }
-    let _ = shutdown_tx.send(true);
-    // адаптеры закрывают соединения и пишут ConnDown; ждём ограниченное время
-    let drained = tokio::time::timeout(Duration::from_secs(15), async {
-        while let Some(res) = venues.join_next().await {
-            if let Ok((ex, Err(e))) = res {
-                tracing::warn!(venue = %ex, error = %e, "venue stopped with error");
-            }
-        }
-    })
-    .await;
-    if drained.is_err() {
-        tracing::warn!("venues did not stop within 15s, aborting");
-        venues.abort_all();
-        while venues.join_next().await.is_some() {}
-    }
-    let _ = monitor.await;
-    let stats = tokio::task::spawn_blocking(move || recorder.finish()).await?;
-    tracing::info!(records = ?stats.records, raw_bytes = stats.raw_bytes, compressed_bytes = stats.compressed_bytes, write_errors = stats.write_errors, "recorder stopped");
-    match fatal {
-        Some(e) => Err(e),
-        None => Ok(()),
-    }
-}
-
-fn spawn_venue<V: MarketDataVenue>(
-    set: &mut tokio::task::JoinSet<(Exchange, Result<(), VenueError>)>,
-    venue: V,
-    sinks: &Sinks,
-    shutdown: &watch::Receiver<bool>,
-) {
-    let (sinks, shutdown) = (sinks.clone(), shutdown.clone());
-    set.spawn(async move {
-        let ex = venue.exchange();
-        tracing::info!(venue = %ex, "venue starting");
-        (ex, venue.run(sinks, shutdown).await)
-    });
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = tokio::signal::ctrl_c();
-    #[cfg(unix)]
-    {
-        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-            Ok(mut term) => {
-                tokio::select! {
-                    _ = ctrl_c => {}
-                    _ = term.recv() => {}
-                }
-            }
-            Err(_) => {
-                let _ = ctrl_c.await;
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = ctrl_c.await;
-    }
+/// Логи в stderr для разовых команд.
+fn init_cli_logging() {
+    let _ = sh_obs::init_logging(&sh_obs::LogConfig { filter: "warn".into(), json_stdout: false, dir: None });
 }
 
 async fn metadata(cfg: AppConfig, venue: &str) -> anyhow::Result<()> {

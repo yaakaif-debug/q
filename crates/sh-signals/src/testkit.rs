@@ -5,7 +5,9 @@ use rust_decimal::Decimal;
 use rust_decimal::dec;
 use sh_core::{Collateral, Exchange, Level, Px, Qty, RecvTs, Usd, VenueKey};
 use sh_md::{InstrumentKey, MarketState};
-use sh_venue_api::{FeeInfo, FeeSource, FundingUpdate, InstrumentMeta, InstrumentStatus, MdEvent, MdEventKind, PriceRule};
+use sh_venue_api::{
+    FeeInfo, FeeSource, FundingUpdate, InstrumentMeta, InstrumentStatus, MdEvent, MdEventKind, PriceRule,
+};
 
 /// Час в миллисекундах.
 pub const HOUR_MS: i64 = 3_600_000;
@@ -92,14 +94,24 @@ impl MarketBuilder {
             max_leverage: Some(dec!(20)),
             margin_mode: None,
             funding_interval_hours: Some(s.interval_h),
-            fees: FeeInfo { maker: None, taker: None, source: FeeSource::AccountRequired, deployer_fee_scale: None, growth_mode: None },
+            fees: FeeInfo {
+                maker: None,
+                taker: None,
+                source: FeeSource::AccountRequired,
+                deployer_fee_scale: None,
+                growth_mode: None,
+            },
             status: InstrumentStatus::Active,
             listed_at_ms: s.listed_at_ms,
         };
         let now = self.now_ms;
         self.market.apply(&ev(&s.key, now, MdEventKind::Metadata(Box::new(meta))));
         self.set_book(&s.key, s.mid, s.half_spread, s.level_qty);
-        self.market.apply(&ev(&s.key, now, MdEventKind::Mark { mark: Some(Px(s.mid)), index: Some(Px(s.mid)), oracle: Some(Px(s.mid)), mid: None }));
+        self.market.apply(&ev(
+            &s.key,
+            now,
+            MdEventKind::Mark { mark: Some(Px(s.mid)), index: Some(Px(s.mid)), oracle: Some(Px(s.mid)), mid: None },
+        ));
         self.market.apply(&ev(&s.key, now, MdEventKind::OpenInterest { base: None, usd: Some(Usd(s.oi_usd)) }));
         let step = (s.interval_h * Decimal::from(HOUR_MS)).trunc().try_into().unwrap_or(HOUR_MS);
         let mut t = now - history_h * HOUR_MS;
@@ -111,7 +123,11 @@ impl MarketBuilder {
         self.market.apply(&ev(
             &s.key,
             now,
-            MdEventKind::Funding(FundingUpdate { predicted_rate: Some(s.rate), next_funding_ms: Some(t), ..FundingUpdate::default() }),
+            MdEventKind::Funding(FundingUpdate {
+                predicted_rate: Some(s.rate),
+                next_funding_ms: Some(t),
+                ..FundingUpdate::default()
+            }),
         ));
         self
     }
@@ -133,14 +149,22 @@ impl MarketBuilder {
         self.market.apply(&ev(
             key,
             now,
-            MdEventKind::Funding(FundingUpdate { settled_rate: Some(rate), settled_at_ms: Some(ts_ms), ..FundingUpdate::default() }),
+            MdEventKind::Funding(FundingUpdate {
+                settled_rate: Some(rate),
+                settled_at_ms: Some(ts_ms),
+                ..FundingUpdate::default()
+            }),
         ));
     }
 
     /// Прогноз фандинга.
     pub fn predict(&mut self, key: &InstrumentKey, rate: Decimal) {
         let now = self.now_ms;
-        self.market.apply(&ev(key, now, MdEventKind::Funding(FundingUpdate { predicted_rate: Some(rate), ..FundingUpdate::default() })));
+        self.market.apply(&ev(
+            key,
+            now,
+            MdEventKind::Funding(FundingUpdate { predicted_rate: Some(rate), ..FundingUpdate::default() }),
+        ));
     }
 }
 

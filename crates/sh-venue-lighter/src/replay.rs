@@ -29,7 +29,13 @@ impl LtReplay {
     }
 
     fn invalidated(&self, market: u32, rec: &RawRecord) -> MdEvent {
-        MdEvent { venue: normalize::venue(), symbol: self.symbol(market), recv: rec.recv, venue_ts_ms: None, kind: MdEventKind::BookInvalidated }
+        MdEvent {
+            venue: normalize::venue(),
+            symbol: self.symbol(market),
+            recv: rec.recv,
+            venue_ts_ms: None,
+            kind: MdEventKind::BookInvalidated,
+        }
     }
 }
 
@@ -101,7 +107,9 @@ impl Replay for LtReplay {
                         out.push(normalize::book_event(&symbol, true, ts_ms, &book, rec.recv));
                     } else {
                         match sb.apply_delta(d) {
-                            ApplyOutcome::Applied => out.push(normalize::book_event(&symbol, false, ts_ms, &book, rec.recv)),
+                            ApplyOutcome::Applied => {
+                                out.push(normalize::book_event(&symbol, false, ts_ms, &book, rec.recv))
+                            }
                             ApplyOutcome::Gap { .. } => out.push(self.invalidated(market, rec)),
                             ApplyOutcome::Buffered | ApplyOutcome::Stale => {}
                         }
@@ -140,22 +148,47 @@ mod tests {
     }
 
     fn rec(source: RawSource, conn: &str, payload: String) -> RawRecord {
-        RawRecord { exchange: Exchange::Lighter, source, conn: conn.into(), recv: RecvTs { wall_ns: 1, mono_ns: 1 }, payload }
+        RawRecord {
+            exchange: Exchange::Lighter,
+            source,
+            conn: conn.into(),
+            recv: RecvTs { wall_ns: 1, mono_ns: 1 },
+            payload,
+        }
     }
 
     #[test]
     fn replays_books_stats_and_metadata() {
         let mut r = LtReplay::new();
         let mut out = Vec::new();
-        r.feed(&rec(RawSource::Rest { ep: "GET /api/v1/fundings?market_id=0&resolution=1h".into() }, "rest", fx("rest_fundings.json")), &mut out);
+        r.feed(
+            &rec(
+                RawSource::Rest { ep: "GET /api/v1/fundings?market_id=0&resolution=1h".into() },
+                "rest",
+                fx("rest_fundings.json"),
+            ),
+            &mut out,
+        );
         assert!(!out.is_empty());
         out.clear();
-        r.feed(&rec(RawSource::Rest { ep: "GET /api/v1/orderBookDetails?filter=perp".into() }, "rest", fx("rest_order_book_details.json")), &mut out);
+        r.feed(
+            &rec(
+                RawSource::Rest { ep: "GET /api/v1/orderBookDetails?filter=perp".into() },
+                "rest",
+                fx("rest_order_book_details.json"),
+            ),
+            &mut out,
+        );
         let eth = out.iter().find(|e| e.symbol == "ETH").unwrap();
         let MdEventKind::Metadata(m) = &eth.kind else { panic!() };
         assert_eq!(m.funding_interval_hours, Some(rust_decimal::Decimal::ONE));
         out.clear();
-        for f in ["ws_order_book_snapshot.json", "ws_order_book_update_1.json", "ws_order_book_update_2.json", "ws_order_book_update_3.json"] {
+        for f in [
+            "ws_order_book_snapshot.json",
+            "ws_order_book_update_1.json",
+            "ws_order_book_update_2.json",
+            "ws_order_book_update_3.json",
+        ] {
             r.feed(&rec(RawSource::Ws, "lt-ws-0", fx(f)), &mut out);
         }
         assert_eq!(out.len(), 4);

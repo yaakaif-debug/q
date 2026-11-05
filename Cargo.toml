@@ -51,6 +51,8 @@ metrics-exporter-prometheus = { version = "0.18", default-features = false, feat
 zstd = "0.14.3"
 governor = "0.10"
 proptest = "1"
+secrecy = { version = "0.10", features = ["serde"] }
+zeroize = "1"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite"] }
 arrow = { version = "60", default-features = false }
 parquet = { version = "60", default-features = false, features = ["arrow", "zstd"] }
@@ -91,6 +93,9 @@ path = "src/bin/latency-probe.rs"
 
 [dependencies]
 sh-core.workspace = true
+sh-md.workspace = true
+sh-signals.workspace = true
+sh-portfolio.workspace = true
 sh-venue-api.workspace = true
 sh-venue-hyperliquid.workspace = true
 sh-venue-lighter.workspace = true
@@ -109,6 +114,8 @@ anyhow.workspace = true
 tracing.workspace = true
 metrics.workspace = true
 zstd.workspace = true
+rust_decimal.workspace = true
+secrecy.workspace = true
 futures-util.workspace = true
 tokio-rustls.workspace = true
 rustls.workspace = true

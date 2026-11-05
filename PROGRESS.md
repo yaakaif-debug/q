@@ -15,8 +15,8 @@
 | Этап | Ветка | База | PR | Статус |
 | --- | --- | --- | --- | --- |
 | M0 | `claude/lucid-mccarthy-gx3vbm` | `main` | #1 | готов, ждёт слияния |
-| M1 | `claude/m1-scanner` | M0 | — | в работе |
-| M2 | `claude/m2-execution` | M1 | — | не начат |
+| M1 | `claude/m1-scanner` | M0 | см. ниже | код готов, PR открыт |
+| M2 | `claude/m2-execution` | M1 | — | в работе |
 | M3 | `claude/m3-live-hl-lighter` | M2 | — | не начат |
 | M4 | `claude/m4-aster-ramp` | M3 | — | не начат |
 
@@ -63,4 +63,24 @@
 
 ## Текущее состояние
 
-M1 в работе. Готово: обновлены SPEC.md (раздел «Testing responsibility») и CLAUDE.md.
+### M1 — готово (код и офлайн-тесты)
+
+- `sh-md::state` — состояние рынка; `sh-signals` — оценки, издержки, размер, оценка пар,
+  символы, сессии, `testkit` для тестов; `sh-portfolio` — теневой портфель и отчёты;
+  `sh-store` — SQLite (`db`) и Parquet (`parquet_out`); `sh-core::secrets`;
+  `sh-obs::alerts` (Telegram); парсеры повтора `HlReplay`, `LtReplay`, `AsReplay`.
+- Корневой крейт: `scan` (движок), `runner` (режимы `record`/`scan`, повтор),
+  `replay_source`, `derive`, `monitor`; CLI `run`, `scan --replay`, `derive`.
+- Конфиг: новые секции `[scanner]`, `[strategy.*]`, `[costs]`, `[fees]`, `[risk]`,
+  `[symbols]`, `[database]`, `[secrets]`, `[telegram]`; `engine.mode` по умолчанию `scan`
+  (в M2 станет `paper`, когда режим появится).
+- Документация: `docs/scanner.md`; systemd: `spread-hunter.service`, таймер Parquet.
+- Не делалось (по правилам): приёмочный 30-дневный прогон — его запускает оператор.
+
+### M2 — следующий шаг
+
+Начать с ветки `claude/m2-execution` от `claude/m1-scanner`. Порядок: трейт `Execution`
+и типы ордеров → `sh-sim` (симулятор площадки) → `sh-exec` (автомат ордера, S5) →
+`sh-risk` → `sh-strategy` (S1/S2 поверх `sh-signals::evaluate`) → портфель позиций и
+сверка → режим `paper` → приватные адаптеры (HL, Lighter FFI, Aster) → `selftest` →
+`spread-ctl` → `backtest`.

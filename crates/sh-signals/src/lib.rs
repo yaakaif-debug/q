@@ -19,7 +19,9 @@ pub use apr::{HOURS_PER_YEAR, funding_apr};
 pub use cost::{CostBreakdown, CostParams, LegCostInput, round_trip_cost};
 pub use economics::{breakeven_hours, capital_for, required_net_spread, roc, s_net};
 pub use estimators::{SpreadEstimates, ema_apr, realized_apr, sign_persistent, spread_series};
-pub use eval::{EstimatesView, EvalContext, Pair, PairEval, PairKind, Reason, SizeBudget, TierEval, evaluate, pairs_from_symbols};
+pub use eval::{
+    EstimatesView, EvalContext, Pair, PairEval, PairKind, Reason, SizeBudget, TierEval, evaluate, pairs_from_symbols,
+};
 pub use fees::{FeeRates, FeesConfig, VenueFees};
 pub use params::{PairRules, RiskLimits, S1Params, S2Params, ScannerParams, StrategyParams, pct};
 pub use sessions::{Calendar, CalendarError};

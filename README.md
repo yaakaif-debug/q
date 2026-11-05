@@ -4,10 +4,14 @@
 Полная спецификация — в [SPEC.md](SPEC.md); заметки по API площадок — в
 [docs/venues/](docs/venues/).
 
-**Текущий этап: M0** — только запись рыночных данных. В репозитории нет подписей,
-приватных эндпоинтов и кода ордеров.
+**Текущий этап** — см. [PROGRESS.md](PROGRESS.md). Готовы M0 (запись рыночных данных)
+и M1 (сканер, теневой портфель, отчёты, Parquet). Торговли нет: ордера появятся в M2,
+живая торговля — в M3 и только при явном включении оператором.
 
-## Что входит в M0
+Claude Code пишет код и офлайн-тесты; приёмку, testnet и live оператор запускает сам
+(SPEC.md, «Testing responsibility»).
+
+## Крейты
 
 | Крейт | Содержимое |
 | --- | --- |
@@ -17,10 +21,19 @@
 | `sh-venue-lighter` | WebSocket только для чтения, стаканы с проверкой `nonce`, переподписка при разрыве |
 | `sh-venue-aster` | Комбинированные потоки futures v3, стаканы по дельтам с синхронизацией через REST-снимок |
 | `sh-md` | Стакан, обнаружение разрывов последовательности с буферизацией и пересинхронизацией по снимку, BBO, проход по глубине, устаревание |
-| `sh-store` | Сырой рекордер (zstd JSONL по площадке и часу UTC), чтение, отчёт о разрывах |
-| `sh-obs` | JSON-логи (stdout и ежедневный файл), экспорт Prometheus на `127.0.0.1:9464` |
+| `sh-store` | Сырой рекордер (zstd JSONL по площадке и часу UTC), чтение, отчёт о разрывах, SQLite (WAL), таблицы Parquet |
+| `sh-obs` | JSON-логи (stdout и ежедневный файл), экспорт Prometheus на `127.0.0.1:9464`, оповещения Telegram |
+| `sh-signals` | APR фандинга, оценки спреда, модель издержек, `s_net`, ROC, точка безубыточности, размер позиции, сопоставление символов, календари сессий, оценка пар |
+| `sh-portfolio` | Теневой портфель M1 и дневные отчёты |
 
-Бинарники: `spread-hunter` (`run`, `metadata`, `inspect`, `dump`) и `latency-probe`.
+Бинарники: `spread-hunter` (`run`, `scan --replay`, `derive`, `metadata`, `inspect`, `dump`)
+и `latency-probe`. Подробности M1 — [docs/scanner.md](docs/scanner.md).
+
+## Режимы
+
+`engine.mode` в конфиге: `record` — только запись; `scan` — запись, сканер раз в минуту,
+теневой портфель на $100k, дневные отчёты в `reports/`. Сырые записи в любом режиме пишутся
+при `recorder.enabled = true` (по умолчанию).
 
 ## Сборка и проверки
 
@@ -42,11 +55,23 @@ cargo test --workspace
 
 Версия тулчейна закреплена в `rust-toolchain.toml`.
 
-## Рекордер
+## Запуск
 
 ```bash
 ./target/release/spread-hunter --config config/default.toml run
 ```
+
+Повтор сканера по записям (без сети) и производные Parquet:
+
+```bash
+./target/release/spread-hunter scan --replay data/raw --from 2026-11-01 --to 2026-11-08
+```
+
+```bash
+./target/release/spread-hunter derive --date 2026-11-01
+```
+
+## Рекордер
 
 Файлы: `data/raw/<venue>/<YYYY-MM-DD>/<venue>-<YYYY-MM-DD>T<HH>.jsonl.zst`.
 Каждый файл — последовательность независимых кадров zstd (сбрасываются раз в
@@ -93,7 +118,7 @@ cargo test --workspace
 (`--allow-test-orders`) в M0 не входит. Если настроен HTTPS-прокси, результат
 помечается `via_proxy`, и цифры TCP/TLS относятся к пути через прокси.
 
-## Запуск рекордера на Ubuntu 24.04
+## Установка на Ubuntu 24.04
 
 ```bash
 sudo apt-get install -y build-essential cmake chrony
@@ -112,7 +137,7 @@ sudo useradd --system --home /opt/spread-hunter --shell /usr/sbin/nologin spread
 ```
 
 ```bash
-sudo mkdir -p /opt/spread-hunter/{bin,config,data,run}
+sudo mkdir -p /opt/spread-hunter/{bin,config,data,run,reports}
 ```
 
 ```bash
@@ -120,15 +145,15 @@ sudo cp target/release/spread-hunter target/release/latency-probe /opt/spread-hu
 ```
 
 ```bash
-sudo cp config/default.toml /opt/spread-hunter/config/
+sudo cp config/default.toml config/symbols.toml /opt/spread-hunter/config/
 ```
 
 ```bash
-sudo chown -R spreadhunter:spreadhunter /opt/spread-hunter/data /opt/spread-hunter/run
+sudo chown -R spreadhunter:spreadhunter /opt/spread-hunter/data /opt/spread-hunter/run /opt/spread-hunter/reports /opt/spread-hunter/config
 ```
 
 ```bash
-sudo cp ops/systemd/spread-hunter-recorder.service /etc/systemd/system/
+sudo cp ops/systemd/spread-hunter.service ops/systemd/spread-hunter-derive.service ops/systemd/spread-hunter-derive.timer /etc/systemd/system/
 ```
 
 ```bash
@@ -136,11 +161,11 @@ sudo systemctl daemon-reload
 ```
 
 ```bash
-sudo systemctl enable --now spread-hunter-recorder
+sudo systemctl enable --now spread-hunter spread-hunter-derive.timer
 ```
 
 ```bash
-journalctl -u spread-hunter-recorder -f
+journalctl -u spread-hunter -f
 ```
 
 Пути в `config/default.toml` относительные (`data/raw`, `data/logs`); unit-файл
@@ -154,4 +179,31 @@ curl -s 127.0.0.1:9464/metrics
 Нужен исходящий доступ к `api.hyperliquid.xyz`, `mainnet.zklighter.elliot.ai`,
 `fapi.asterdex.com`, `fstream.asterdex.com` (TCP 443). Lighter отклоняет
 рукопожатие WebSocket из ограниченных юрисдикций без `?readonly=true`; URL по
-умолчанию уже его содержит (для M0 нужен только режим чтения).
+умолчанию уже его содержит (для рыночных данных нужен только режим чтения).
+
+## Секреты
+
+Ключей в репозитории нет. Секреты — один TOML-файл (пример ниже), зашифрованный на
+сервере и расшифровываемый при старте: systemd `LoadCredentialEncrypted` (основной
+способ) или внешняя команда, например `age -d`, которая спросит пароль. В M1 нужен только
+Telegram (по желанию); ключи площадок понадобятся с M2.
+
+```toml
+[telegram]
+bot_token = "123456:ABC..."
+chat_id = "-1001234567890"
+allowed_user_ids = [111111111]
+```
+
+Шифрование для systemd (файл с открытым текстом после этого удалить):
+
+```bash
+sudo systemd-creds encrypt --name=secrets /root/secrets.toml /etc/credstore.encrypted/spread-hunter-secrets
+```
+
+```bash
+sudo shred -u /root/secrets.toml
+```
+
+Затем в `spread-hunter.service` раскомментировать строку `LoadCredentialEncrypted=...`, в
+конфиге задать `[secrets] source = "credential:secrets"` и `[telegram] enabled = true`.

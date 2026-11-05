@@ -352,8 +352,20 @@ pub fn evaluate(pair: &Pair, ctx: &EvalContext<'_>) -> PairEval {
     let conv = |m: &sh_venue_api::InstrumentMeta| {
         m.venue.exchange == Exchange::Hyperliquid && !m.venue.dex.is_empty() && m.collateral != Collateral::Usdc
     };
-    let short_leg = LegCostInput { book: &ss.book, fees: ctx.fees.resolve(ms), entry_side: Side::Sell, leverage: lev_s, needs_conversion: conv(ms) };
-    let long_leg = LegCostInput { book: &sl.book, fees: ctx.fees.resolve(ml), entry_side: Side::Buy, leverage: lev_l, needs_conversion: conv(ml) };
+    let short_leg = LegCostInput {
+        book: &ss.book,
+        fees: ctx.fees.resolve(ms),
+        entry_side: Side::Sell,
+        leverage: lev_s,
+        needs_conversion: conv(ms),
+    };
+    let long_leg = LegCostInput {
+        book: &sl.book,
+        fees: ctx.fees.resolve(ml),
+        entry_side: Side::Buy,
+        leverage: lev_l,
+        needs_conversion: conv(ml),
+    };
     let rebalance = Usd(match pair.kind {
         PairKind::S1 => ctx.costs.rebalance_usd_s1,
         PairKind::S2 => ctx.costs.rebalance_usd_s2,
@@ -385,8 +397,11 @@ pub fn evaluate(pair: &Pair, ctx: &EvalContext<'_>) -> PairEval {
         let margin_per_notional = per_notional(lev_s) + per_notional(lev_l);
         let capital_notional = Usd(budget.pair_capital.0 * (Decimal::ONE - ctx.reserve_frac) / margin_per_notional);
         // остаток лимита платформы в марже переводим в номинал ноги
-        let (room_s, room_l) =
-            if a_is_short { (budget.room_margin[0], budget.room_margin[1]) } else { (budget.room_margin[1], budget.room_margin[0]) };
+        let (room_s, room_l) = if a_is_short {
+            (budget.room_margin[0], budget.room_margin[1])
+        } else {
+            (budget.room_margin[1], budget.room_margin[0])
+        };
         let depth = |st: &InstrumentState, side: Side| -> Usd {
             let q = st.book.depth_within_bps(side, Decimal::TEN).map(|q| q.0).unwrap_or(Decimal::ZERO);
             Usd(q * price.0)

@@ -74,7 +74,11 @@ impl Replay for AsReplay {
                     }
                 } else if ep.contains("/openInterest") {
                     if let Ok(oi) = serde_json::from_str::<OpenInterest>(&rec.payload) {
-                        out.push(Self::event(&oi.symbol.clone(), rec, MdEventKind::OpenInterest { base: Some(oi.open_interest), usd: None }));
+                        out.push(Self::event(
+                            &oi.symbol.clone(),
+                            rec,
+                            MdEventKind::OpenInterest { base: Some(oi.open_interest), usd: None },
+                        ));
                     }
                 } else if ep.contains("/fundingRate")
                     && let Ok(items) = serde_json::from_str::<Vec<FundingRateItem>>(&rec.payload)
@@ -96,7 +100,8 @@ impl Replay for AsReplay {
             }
             RawSource::Sys => {
                 if let Ok(SysEvent::ConnDown { .. }) = serde_json::from_str::<SysEvent>(&rec.payload) {
-                    let gone: Vec<String> = self.owner.iter().filter(|(_, c)| **c == rec.conn).map(|(s, _)| s.clone()).collect();
+                    let gone: Vec<String> =
+                        self.owner.iter().filter(|(_, c)| **c == rec.conn).map(|(s, _)| s.clone()).collect();
                     for s in gone {
                         self.owner.remove(&s);
                         if self.books.remove(&s).is_some_and(|b| b.is_synced()) {
@@ -143,7 +148,13 @@ mod tests {
     }
 
     fn rec(source: RawSource, payload: String) -> RawRecord {
-        RawRecord { exchange: Exchange::Aster, source, conn: "as-ws-1".into(), recv: RecvTs { wall_ns: 1, mono_ns: 1 }, payload }
+        RawRecord {
+            exchange: Exchange::Aster,
+            source,
+            conn: "as-ws-1".into(),
+            recv: RecvTs { wall_ns: 1, mono_ns: 1 },
+            payload,
+        }
     }
 
     #[test]
@@ -152,7 +163,10 @@ mod tests {
         let mut out = Vec::new();
         r.feed(&rec(RawSource::Rest { ep: "GET /fapi/v3/fundingInfo".into() }, fx("rest_funding_info.json")), &mut out);
         out.clear();
-        r.feed(&rec(RawSource::Rest { ep: "GET /fapi/v3/exchangeInfo".into() }, fx("rest_exchange_info.json")), &mut out);
+        r.feed(
+            &rec(RawSource::Rest { ep: "GET /fapi/v3/exchangeInfo".into() }, fx("rest_exchange_info.json")),
+            &mut out,
+        );
         let btc = out.iter().find(|e| e.symbol == "BTCUSDT").unwrap();
         let MdEventKind::Metadata(m) = &btc.kind else { panic!() };
         assert_eq!(m.funding_interval_hours, Some(Decimal::from(8)));
@@ -164,14 +178,21 @@ mod tests {
             AsMsg::Depth(d) => d,
             _ => panic!(),
         });
-        let snap = format!(r#"{{"lastUpdateId":{},"E":1,"T":1,"bids":[["80000","1"]],"asks":[["80200","1"]]}}"#, d1.seq.last);
+        let snap =
+            format!(r#"{{"lastUpdateId":{},"E":1,"T":1,"bids":[["80000","1"]],"asks":[["80200","1"]]}}"#, d1.seq.last);
         r.feed(&rec(RawSource::Rest { ep: "GET /fapi/v3/depth?symbol=BTCUSDT&limit=50".into() }, snap), &mut out);
         assert!(matches!(out[0].kind, MdEventKind::BookSnapshot { .. }));
         out.clear();
         r.feed(&rec(RawSource::Ws, fx("ws_depth_update_2.json")), &mut out);
         assert!(matches!(out[0].kind, MdEventKind::BookDelta { .. }));
         out.clear();
-        r.feed(&rec(RawSource::Rest { ep: "GET /fapi/v3/fundingRate?symbol=BTCUSDT&limit=3".into() }, fx("rest_funding_rate_btc.json")), &mut out);
+        r.feed(
+            &rec(
+                RawSource::Rest { ep: "GET /fapi/v3/fundingRate?symbol=BTCUSDT&limit=3".into() },
+                fx("rest_funding_rate_btc.json"),
+            ),
+            &mut out,
+        );
         assert_eq!(out.len(), 4);
         out.clear();
         r.feed(&rec(RawSource::Sys, SysEvent::ConnDown { reason: "x".into() }.to_json()), &mut out);

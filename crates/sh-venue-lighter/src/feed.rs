@@ -195,7 +195,13 @@ impl MarketDataVenue for LighterVenue {
             shutdown.clone(),
         ));
         if self.cfg.funding_backfill {
-            tasks.spawn(funding_backfill(rest.clone(), shared.clone(), sinks.clone(), self.cfg.funding_history_hours, shutdown.clone()));
+            tasks.spawn(funding_backfill(
+                rest.clone(),
+                shared.clone(),
+                sinks.clone(),
+                self.cfg.funding_history_hours,
+                shutdown.clone(),
+            ));
         }
 
         loop {

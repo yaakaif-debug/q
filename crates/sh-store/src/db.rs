@@ -104,7 +104,10 @@ impl Db {
 
     /// Текущая версия схемы.
     pub async fn schema_version(&self) -> Result<i64, DbError> {
-        Ok(sqlx::query("SELECT COALESCE(MAX(version), 0) AS v FROM schema_version").fetch_one(&self.pool).await?.try_get("v")?)
+        Ok(sqlx::query("SELECT COALESCE(MAX(version), 0) AS v FROM schema_version")
+            .fetch_one(&self.pool)
+            .await?
+            .try_get("v")?)
     }
 
     /// Записывает значение по ключу.
@@ -146,11 +149,13 @@ impl Db {
 
     /// Журнал за `[from_ms, to_ms)`.
     pub async fn ledger_between(&self, from_ms: i64, to_ms: i64) -> Result<Vec<LedgerRow>, DbError> {
-        let rows = sqlx::query("SELECT ts_ms, pair_id, leg, kind, amount FROM shadow_ledger WHERE ts_ms >= ? AND ts_ms < ? ORDER BY id")
-            .bind(from_ms)
-            .bind(to_ms)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query(
+            "SELECT ts_ms, pair_id, leg, kind, amount FROM shadow_ledger WHERE ts_ms >= ? AND ts_ms < ? ORDER BY id",
+        )
+        .bind(from_ms)
+        .bind(to_ms)
+        .fetch_all(&self.pool)
+        .await?;
         rows.iter()
             .map(|r| {
                 Ok(LedgerRow {
@@ -168,7 +173,11 @@ impl Db {
     pub async fn first_seen_insert(&self, instruments: &[String], now_ms: i64) -> Result<(), DbError> {
         let mut tx = self.pool.begin().await?;
         for i in instruments {
-            sqlx::query("INSERT OR IGNORE INTO first_seen (instrument, ts_ms) VALUES (?, ?)").bind(i).bind(now_ms).execute(&mut *tx).await?;
+            sqlx::query("INSERT OR IGNORE INTO first_seen (instrument, ts_ms) VALUES (?, ?)")
+                .bind(i)
+                .bind(now_ms)
+                .execute(&mut *tx)
+                .await?;
         }
         tx.commit().await?;
         Ok(())
@@ -193,7 +202,13 @@ mod tests {
         db.kv_put("a", "{\"x\":1}", 1).await.unwrap();
         db.kv_put("a", "{\"x\":2}", 2).await.unwrap();
         assert_eq!(db.kv_get("a").await.unwrap().as_deref(), Some("{\"x\":2}"));
-        let row = |ts| LedgerRow { ts_ms: ts, pair_id: "p".into(), leg: None, kind: "fee".into(), amount: "-1.2345678901234567".into() };
+        let row = |ts| LedgerRow {
+            ts_ms: ts,
+            pair_id: "p".into(),
+            leg: None,
+            kind: "fee".into(),
+            amount: "-1.2345678901234567".into(),
+        };
         db.append_ledger(&[row(10), row(20), row(30)]).await.unwrap();
         let got = db.ledger_between(10, 30).await.unwrap();
         assert_eq!(got.len(), 2);
