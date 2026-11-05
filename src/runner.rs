@@ -74,8 +74,9 @@ pub fn make_telegram(cfg: &AppConfig, secrets: &mut Secrets) -> anyhow::Result<(
     Ok((alerts, Some((client, allowed))))
 }
 
-/// Запуск в режиме из конфигурации (`record` или `scan`).
-pub async fn run_live(cfg: AppConfig) -> anyhow::Result<()> {
+/// Запуск в режиме из конфигурации (`record`, `scan`, `paper`, `live`).
+pub async fn run_live(cfg: AppConfig, flags: crate::live::LiveFlags) -> anyhow::Result<()> {
+    crate::live::check_live_gate(&cfg.engine.mode, flags).map_err(anyhow::Error::msg)?;
     sh_obs::init_logging(&cfg.log).context("logging")?;
     install_crypto();
     sh_obs::init_metrics(&cfg.metrics).map_err(anyhow::Error::msg).context("metrics")?;
@@ -110,20 +111,45 @@ pub async fn run_live(cfg: AppConfig) -> anyhow::Result<()> {
             let state = ScanState::open(&cfg, clock.wall_ms()).await?;
             tokio::spawn(scan_loop(md_rx, clock.clone(), state, alerts.clone()))
         }
-        "paper" => {
-            let state = crate::trade::PaperState::open(&cfg, clock.wall_ms()).await?;
-            let (ctl_tx, ctl_rx) = mpsc::channel(16);
-            let sock = PathBuf::from(&cfg.control.socket);
-            let tx = ctl_tx.clone();
-            tokio::spawn(async move {
-                if let Err(e) = crate::ctl::serve(sock, tx).await {
-                    tracing::error!(error = %e, "control socket failed");
-                }
-            });
-            if let Some((tg, allowed)) = tg_commands.clone() {
-                tokio::spawn(crate::ctl::telegram_commands(tg, allowed, ctl_tx.clone()));
+        "live" if !flags.dry_run => {
+            let symbols = SymbolMap::load(Path::new(&cfg.symbols.path)).context("symbols")?;
+            let meta = crate::live::new_registry();
+            let dexes = crate::live::hl_dexes(&cfg, &symbols);
+            let execs = crate::live::build_execs(&cfg, &mut secrets, &meta, dexes, proxy.clone(), false)?;
+            if execs.is_empty() {
+                tracing::warn!("live mode without any venue with trading_enabled = true: nothing will trade");
             }
-            drop(ctl_tx);
+            alerts.send(
+                Level::Crit,
+                "live_start",
+                &format!("LIVE trading started on {:?}", execs.keys().collect::<Vec<_>>()),
+            );
+            let state = crate::live::LiveState::open(&cfg, execs, meta, clock.wall_ms()).await?;
+            let (ctl_tx, ctl_rx) = mpsc::channel(16);
+            spawn_control(&cfg, ctl_tx, tg_commands.clone());
+            tokio::spawn(crate::live::live_loop(
+                md_rx,
+                ctl_rx,
+                clock.clone(),
+                state,
+                alerts.clone(),
+                shutdown_rx.clone(),
+            ))
+        }
+        "paper" | "live" => {
+            let state = if cfg.engine.mode == "live" {
+                // live --dry-run: настоящие ключи и метаданные, подписи без отправки, исполнение на симуляторе
+                let symbols = SymbolMap::load(Path::new(&cfg.symbols.path)).context("symbols")?;
+                let meta = crate::live::new_registry();
+                let dexes = crate::live::hl_dexes(&cfg, &symbols);
+                let execs = crate::live::build_execs(&cfg, &mut secrets, &meta, dexes, proxy.clone(), true)?;
+                tracing::warn!("live --dry-run: orders are signed and logged, never sent");
+                crate::trade::PaperState::open_dry_run(&cfg, clock.wall_ms(), execs).await?
+            } else {
+                crate::trade::PaperState::open(&cfg, clock.wall_ms()).await?
+            };
+            let (ctl_tx, ctl_rx) = mpsc::channel(16);
+            spawn_control(&cfg, ctl_tx, tg_commands.clone());
             tokio::spawn(crate::trade::paper_loop(md_rx, ctl_rx, clock.clone(), state, alerts.clone()))
         }
         _ => tokio::spawn(monitor::run(md_rx, clock.clone())),
@@ -185,6 +211,20 @@ pub async fn run_live(cfg: AppConfig) -> anyhow::Result<()> {
     match fatal {
         Some(e) => Err(e),
         None => Ok(()),
+    }
+}
+
+/// Сокет управления и команды Telegram.
+fn spawn_control(cfg: &AppConfig, ctl_tx: mpsc::Sender<crate::ctl::CtlEnvelope>, tg: TelegramCommands) {
+    let sock = PathBuf::from(&cfg.control.socket);
+    let tx = ctl_tx.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::ctl::serve(sock, tx).await {
+            tracing::error!(error = %e, "control socket failed");
+        }
+    });
+    if let Some((client, allowed)) = tg {
+        tokio::spawn(crate::ctl::telegram_commands(client, allowed, ctl_tx));
     }
 }
 

@@ -2,7 +2,7 @@
 # Наложение окружения: --overlay config/live.toml; переменные SH_<SECTION>__<KEY>.
 
 [engine]
-mode = "paper"             # record | scan | paper (по умолчанию); live появится в M3
+mode = "paper"             # record | scan | paper (по умолчанию) | live (нужны ещё флаги --live --i-understand-real-money)
 equity_reserve_pct = 15    # резерв капитала вне площадок, %
 
 [recorder]
@@ -28,7 +28,7 @@ proxy = "env"              # env | none | http://host:port (только для 
 
 [venues.hyperliquid]
 enabled = true
-trading_enabled = false    # в M0 обязана быть false
+trading_enabled = false    # оператор включает только для live после selftest
 rest = "https://api.hyperliquid.xyz"
 ws = "wss://api.hyperliquid.xyz/ws"
 dexes = "auto"             # ядро + все HIP-3 дексы из perpDexs, обновление раз в час
@@ -194,3 +194,8 @@ hyperliquid_dexes = [""]
 hyperliquid_usdc_token = ""   # пусто — значение по сети (docs/venues/hyperliquid.md)
 aster_rest = ""               # пусто — https://fapi3.asterdex.com
 aster_ws = ""                 # пусто — wss://fstream.asterdex.com
+
+[stage]
+# Ступень капитала для live (M3: $5k и не больше 2 пар; M4 поднимает до $25k → $50k → $100k).
+max_capital_usd = 5000
+max_pairs = 2

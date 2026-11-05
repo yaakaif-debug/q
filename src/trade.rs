@@ -58,14 +58,21 @@ pub fn engine_settings(cfg: &AppConfig, mode: EngineMode) -> EngineSettings {
         EngineMode::Live => BTreeMap::from([
             (Exchange::Hyperliquid, cfg.venues.hyperliquid.trading_enabled),
             (Exchange::Lighter, cfg.venues.lighter.trading_enabled),
-            (Exchange::Aster, cfg.venues.aster.trading_enabled),
+            // Aster в live — только с M4
+            (Exchange::Aster, false),
         ]),
     };
     EngineSettings {
         scan: scan_settings(cfg),
         mode,
         trading_enabled,
-        stage: StageCaps::default(),
+        // ступень капитала действует в live; в paper и backtest — без ограничений ступени
+        stage: match mode {
+            EngineMode::Live => {
+                StageCaps { max_capital_usd: Some(cfg.stage.max_capital_usd), max_pairs: Some(cfg.stage.max_pairs) }
+            }
+            _ => StageCaps::default(),
+        },
         reconcile_tol: Decimal::new(1, 9),
     }
 }
@@ -90,14 +97,28 @@ pub struct PaperState {
     kill_file: PathBuf,
     kill_file_seen: bool,
     last_persist_ms: i64,
+    key: &'static str,
+    dry_run: Option<crate::live::DryRunExecs>,
 }
 
 impl PaperState {
+    /// `live --dry-run`: те же данные и симулятор, отдельное состояние, а каждая команда
+    /// подписывается приватным адаптером без отправки.
+    pub async fn open_dry_run(cfg: &AppConfig, now_ms: i64, execs: crate::live::DryRunExecs) -> anyhow::Result<Self> {
+        let mut s = Self::open_with_key(cfg, now_ms, "engine_state_dry_run").await?;
+        s.dry_run = Some(execs);
+        Ok(s)
+    }
+
     /// Открывает базу, восстанавливает движок и симулятор.
     pub async fn open(cfg: &AppConfig, now_ms: i64) -> anyhow::Result<Self> {
+        Self::open_with_key(cfg, now_ms, ENGINE_KEY).await
+    }
+
+    async fn open_with_key(cfg: &AppConfig, now_ms: i64, key: &'static str) -> anyhow::Result<Self> {
         let symbols = SymbolMap::load(Path::new(&cfg.symbols.path)).context("symbols")?;
         let db = Db::open(Path::new(&cfg.database.path)).await.context("database")?;
-        let state = match db.kv_get(ENGINE_KEY).await? {
+        let state = match db.kv_get(key).await? {
             Some(json) => Some(serde_json::from_str::<EngineState>(&json).context("stored engine state")?),
             None => None,
         };
@@ -119,10 +140,15 @@ impl PaperState {
             kill_file: PathBuf::from(&cfg.control.kill_file),
             kill_file_seen: false,
             last_persist_ms: 0,
+            key,
+            dry_run: None,
         })
     }
 
     async fn handle(&mut self, out: EngineOutput, now_ms: i64, alerts: &Alerts) -> anyhow::Result<()> {
+        if let Some(d) = &self.dry_run {
+            crate::live::dry_run_sign(d, &out.commands);
+        }
         for a in &out.alerts {
             alerts.send(level(a.level), &a.key, &a.text);
         }
@@ -148,7 +174,7 @@ impl PaperState {
     /// Сохраняет состояние движка.
     pub async fn persist(&mut self, now_ms: i64) -> anyhow::Result<()> {
         let json = serde_json::to_string(&self.driver.engine.state())?;
-        self.db.kv_put(ENGINE_KEY, &json, now_ms).await?;
+        self.db.kv_put(self.key, &json, now_ms).await?;
         self.last_persist_ms = now_ms;
         Ok(())
     }
@@ -208,6 +234,7 @@ pub async fn paper_loop(
                 state.check_kill_file(now);
                 let mut out = state.driver.take_output();
                 let o = state.driver.tick(now);
+                out.commands.extend(o.commands);
                 out.alerts.extend(o.alerts);
                 out.ledger.extend(o.ledger);
                 out.scanned |= o.scanned;

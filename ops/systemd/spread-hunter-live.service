@@ -1,0 +1,44 @@
+# Live-торговля (M3): наложение config/live.toml и флаги --live --i-understand-real-money.
+# Включать только после selftest и 14 дней paper (SPEC.md). Не запускать одновременно
+# с spread-hunter.service: один процесс на аккаунт.
+# Установка и ключи — см. README.md.
+[Unit]
+Description=spread-hunter LIVE trading
+Documentation=file:///opt/spread-hunter/README.md
+After=network-online.target chrony.service
+Wants=network-online.target
+Conflicts=spread-hunter.service
+
+[Service]
+Type=simple
+User=spreadhunter
+Group=spreadhunter
+WorkingDirectory=/opt/spread-hunter
+ExecStart=/opt/spread-hunter/bin/spread-hunter --config /opt/spread-hunter/config/default.toml --overlay /opt/spread-hunter/config/live.toml run --live --i-understand-real-money
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Environment=RUST_LOG=info
+# Секреты: файл, зашифрованный `systemd-creds encrypt`, расшифровывается systemd в
+# $CREDENTIALS_DIRECTORY/secrets; в конфиге [secrets] source = "credential:secrets".
+LoadCredentialEncrypted=secrets:/etc/credstore.encrypted/spread-hunter-secrets
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+ReadWritePaths=/opt/spread-hunter/data /opt/spread-hunter/run /opt/spread-hunter/reports
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

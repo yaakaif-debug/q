@@ -78,9 +78,10 @@ impl SimDriver {
         self.next_tick_ms = Some(now_ms - now_ms.rem_euclid(self.tick_every_ms) + self.tick_every_ms);
         let out = self.sim.advance(now_ms);
         self.feed(out, now_ms);
-        let mut o = self.engine.tick(now_ms);
-        for c in o.commands.drain(..) {
-            self.sim.submit(c, now_ms);
+        let o = self.engine.tick(now_ms);
+        // команды остаются в выходе: live --dry-run подписывает их адаптерами без отправки
+        for c in &o.commands {
+            self.sim.submit(c.clone(), now_ms);
         }
         if o.want_snapshots {
             self.snapshots(now_ms);

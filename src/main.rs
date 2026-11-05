@@ -30,8 +30,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Запуск в режиме из конфига (`record`, `scan`, `paper`).
-    Run,
+    /// Запуск в режиме из конфига (`record`, `scan`, `paper`, `live`).
+    Run {
+        /// Разрешить live (вместе с `engine.mode = "live"`).
+        #[arg(long)]
+        live: bool,
+        /// Подтверждение: live торгует реальными деньгами.
+        #[arg(long)]
+        i_understand_real_money: bool,
+        /// live без отправки ордеров: подпись и журнал, исполнение на симуляторе.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Загрузить и вывести нормализованные метаданные площадок (JSON).
     Metadata {
         /// Площадка: hyperliquid, lighter, aster или all.
@@ -154,7 +164,11 @@ fn main() -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
             rt.block_on(async move {
                 match cmd {
-                    Cmd::Run => runner::run_live(cfg).await,
+                    Cmd::Run { live, i_understand_real_money, dry_run } => {
+                        let flags =
+                            spread_hunter::live::LiveFlags { live, real_money: i_understand_real_money, dry_run };
+                        runner::run_live(cfg, flags).await
+                    }
                     Cmd::Metadata { venue } => metadata(cfg, &venue).await,
                     Cmd::Selftest {
                         network,

@@ -71,9 +71,7 @@ impl Default for LighterConfig {
 impl LighterConfig {
     /// Проверка настроек.
     pub fn validate(&self) -> Result<(), String> {
-        if self.trading_enabled {
-            return Err("venues.lighter.trading_enabled must be false in M0".into());
-        }
+        // trading_enabled = true разрешено с M3; по умолчанию false, торговля — только в live
         if self.subs_per_connection == 0 || self.subs_per_connection > 500 {
             return Err("venues.lighter.subs_per_connection must be in 1..=500".into());
         }
@@ -97,7 +95,7 @@ mod tests {
     #[test]
     fn defaults_valid_and_limits_enforced() {
         assert_eq!(LighterConfig::default().validate(), Ok(()));
-        assert!(LighterConfig { trading_enabled: true, ..LighterConfig::default() }.validate().is_err());
+        assert!(LighterConfig { trading_enabled: true, ..LighterConfig::default() }.validate().is_ok());
         assert!(LighterConfig { ws_messages_per_minute: 500, ..LighterConfig::default() }.validate().is_err());
         assert!(LighterConfig { subs_per_connection: 501, ..LighterConfig::default() }.validate().is_err());
     }

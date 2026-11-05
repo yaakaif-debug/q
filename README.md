@@ -5,10 +5,12 @@
 [docs/venues/](docs/venues/).
 
 **Текущий этап** — см. [PROGRESS.md](PROGRESS.md). Готовы M0 (запись рыночных данных),
-M1 (сканер, теневой портфель, отчёты, Parquet) и M2 (движок исполнения, риск, S5, paper,
-backtest, `spread-ctl`, приватные адаптеры, `selftest`). Режим по умолчанию — `paper`:
-реальных ордеров нет. Живая торговля — с M3 и только при явном включении оператором
-(`engine.mode = "live"` и флаги `--live --i-understand-real-money`).
+M1 (сканер, теневой портфель, отчёты, Parquet), M2 (движок исполнения, риск, S5, paper,
+backtest, `spread-ctl`, приватные адаптеры, `selftest`) и M3 (live на Hyperliquid + Lighter,
+`--dry-run`, ступень $5k / 2 пары — [docs/live.md](docs/live.md)). Режим по умолчанию —
+`paper`: реальных ордеров нет. Живая торговля — только при явном включении оператором
+(`engine.mode = "live"`, флаги `--live --i-understand-real-money` и `trading_enabled = true`
+на площадке).
 
 Claude Code пишет код и офлайн-тесты; приёмку, testnet и live оператор запускает сам
 (SPEC.md, «Testing responsibility»).

@@ -57,6 +57,24 @@ pub struct AppConfig {
     pub control: ControlConfig,
     /// Приватное исполнение (адаптеры, подписанты).
     pub execution: ExecutionConfig,
+    /// Ступень капитала live (M3: $5k и 2 пары).
+    pub stage: StageConfig,
+}
+
+/// Настройки `[stage]`: ограничения капитала и числа пар в live.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct StageConfig {
+    /// Капитал в парах, $.
+    pub max_capital_usd: Decimal,
+    /// Число пар.
+    pub max_pairs: usize,
+}
+
+impl Default for StageConfig {
+    fn default() -> Self {
+        Self { max_capital_usd: dec!(5000), max_pairs: 2 }
+    }
 }
 
 /// Настройки `[execution]` приватных адаптеров.
@@ -219,7 +237,7 @@ impl Default for EngineConfig {
 }
 
 /// Режимы, доступные в текущем этапе.
-pub const AVAILABLE_MODES: &[&str] = &["record", "scan", "paper"];
+pub const AVAILABLE_MODES: &[&str] = &["record", "scan", "paper", "live"];
 
 /// Настройки `[network]`.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -306,6 +324,9 @@ impl AppConfig {
                 return Err(format!("paper: unknown venue '{k}'"));
             }
         }
+        if self.stage.max_capital_usd <= Decimal::ZERO || self.stage.max_pairs == 0 {
+            return Err("stage.max_capital_usd and stage.max_pairs must be positive".into());
+        }
         if self.paper.tick_ms <= 0 {
             return Err("paper.tick_ms must be positive".into());
         }
@@ -332,6 +353,18 @@ mod tests {
     }
 
     #[test]
+    fn live_overlay_is_valid_and_trading_stays_off() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("config/default.toml");
+        let live = Path::new(env!("CARGO_MANIFEST_DIR")).join("config/live.toml");
+        let cfg = AppConfig::load(&base, Some(&live)).unwrap();
+        assert_eq!(cfg.engine.mode, "live");
+        assert_eq!(cfg.stage.max_pairs, 2);
+        assert!(!cfg.venues.hyperliquid.trading_enabled && !cfg.venues.lighter.trading_enabled);
+        assert!(!cfg.venues.aster.trading_enabled);
+        assert_ne!(cfg.database.path, AppConfig::load(&base, None).unwrap().database.path);
+    }
+
+    #[test]
     fn unknown_keys_are_rejected() {
         assert!(parse("[engine]\nmode = \"record\"\nfoo = 1\n").is_err());
         assert!(parse("[venues.hyperliquid]\nmax_subs = 5\n").is_err());
@@ -341,10 +374,12 @@ mod tests {
 
     #[test]
     fn non_record_modes_and_trading_are_rejected() {
-        assert!(parse("[engine]\nmode = \"live\"\n").is_err());
+        assert!(parse("[engine]\nmode = \"live\"\n").is_ok());
+        assert!(parse("[engine]\nmode = \"margin\"\n").is_err());
         assert!(parse("[engine]\nmode = \"record\"\n[recorder]\nenabled = false\n").is_err());
         assert!(parse("[secrets]\nsource = \"vault:x\"\n").is_err());
         assert!(parse("[venues.aster]\ntrading_enabled = true\n").is_err());
+        assert!(parse("[venues.lighter]\ntrading_enabled = true\n").is_ok());
         assert!(parse("[network]\nproxy = \"socks5://x:1\"\n").is_err());
         assert!(parse("").is_ok());
     }

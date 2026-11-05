@@ -1,5 +1,5 @@
 Read SPEC.md before any work. Follow its milestones strictly.
-Current milestone: M3 (code only; see PROGRESS.md for status).
+Current milestone: M4 (code only; see PROGRESS.md for status).
 README, PROGRESS.md and all files in docs/ are written in Russian.
 Code comments in Russian. Identifiers, logs and commit messages
 stay in English. Mark anything not confirmed by official docs as

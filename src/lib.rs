@@ -6,6 +6,7 @@ pub mod config;
 pub mod ctl;
 pub mod derive;
 pub mod engine;
+pub mod live;
 pub mod monitor;
 pub mod replay_source;
 pub mod runner;
