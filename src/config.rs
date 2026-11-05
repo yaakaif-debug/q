@@ -59,7 +59,38 @@ pub struct AppConfig {
     pub execution: ExecutionConfig,
     /// Ступень капитала live (M3: $5k и 2 пары).
     pub stage: StageConfig,
+    /// Планировщик перебалансировки (M4).
+    pub rebalance: RebalanceConfig,
 }
+
+/// Настройки `[rebalance]`: только публичные адреса, ключей нет.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct RebalanceConfig {
+    /// Адреса депозита по площадкам (`hyperliquid`, `lighter`, `aster`).
+    pub deposit_addresses: std::collections::BTreeMap<String, String>,
+    /// Адрес основного аккаунта Hyperliquid (получатель `agentSendAsset`).
+    pub hyperliquid_account: String,
+    /// Минимальный перевод, $.
+    pub min_transfer_usd: Decimal,
+    /// Запас сверх нужной маржи на источнике, %.
+    pub keep_buffer_pct: Decimal,
+}
+
+impl Default for RebalanceConfig {
+    fn default() -> Self {
+        Self {
+            deposit_addresses: std::collections::BTreeMap::new(),
+            hyperliquid_account: String::new(),
+            min_transfer_usd: dec!(100),
+            keep_buffer_pct: dec!(10),
+        }
+    }
+}
+
+/// Лестница капитала live (SPEC.md, M3–M4): $5k → $25k → $50k → $100k. Следующую ступень
+/// оператор включает сам после 14 чистых дней (`spread-ctl status` → `clean_days`).
+pub const STAGE_LADDER_USD: [i64; 4] = [5000, 25_000, 50_000, 100_000];
 
 /// Настройки `[stage]`: ограничения капитала и числа пар в live.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -324,8 +355,12 @@ impl AppConfig {
                 return Err(format!("paper: unknown venue '{k}'"));
             }
         }
-        if self.stage.max_capital_usd <= Decimal::ZERO || self.stage.max_pairs == 0 {
-            return Err("stage.max_capital_usd and stage.max_pairs must be positive".into());
+        if !STAGE_LADDER_USD.iter().any(|v| Decimal::from(*v) == self.stage.max_capital_usd)
+            || self.stage.max_pairs == 0
+        {
+            return Err(format!(
+                "stage.max_capital_usd must be one of {STAGE_LADDER_USD:?} and stage.max_pairs positive"
+            ));
         }
         if self.paper.tick_ms <= 0 {
             return Err("paper.tick_ms must be positive".into());
@@ -378,7 +413,9 @@ mod tests {
         assert!(parse("[engine]\nmode = \"margin\"\n").is_err());
         assert!(parse("[engine]\nmode = \"record\"\n[recorder]\nenabled = false\n").is_err());
         assert!(parse("[secrets]\nsource = \"vault:x\"\n").is_err());
-        assert!(parse("[venues.aster]\ntrading_enabled = true\n").is_err());
+        assert!(parse("[venues.aster]\ntrading_enabled = true\n").is_ok());
+        assert!(parse("[stage]\nmax_capital_usd = 25000\nmax_pairs = 4\n").is_ok());
+        assert!(parse("[stage]\nmax_capital_usd = 30000\n").is_err());
         assert!(parse("[venues.lighter]\ntrading_enabled = true\n").is_ok());
         assert!(parse("[network]\nproxy = \"socks5://x:1\"\n").is_err());
         assert!(parse("").is_ok());

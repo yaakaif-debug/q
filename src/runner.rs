@@ -295,6 +295,53 @@ fn kind_from(s: &str) -> Option<LedgerKind> {
     })
 }
 
+/// Параметры планировщика из конфигурации.
+pub fn plan_params(
+    cfg: &AppConfig,
+    equity: sh_core::Usd,
+    in_transit: rust_decimal::Decimal,
+) -> sh_portfolio::rebalance::PlanParams {
+    let token = if cfg.execution.hyperliquid_usdc_token.is_empty() {
+        sh_venue_hyperliquid::exec::HlExecConfig::for_network(true).usdc_token
+    } else {
+        cfg.execution.hyperliquid_usdc_token.clone()
+    };
+    sh_portfolio::rebalance::PlanParams {
+        total_equity: equity,
+        in_transit: sh_core::Usd(in_transit),
+        max_in_transit_pct: cfg.risk.max_in_transit_pct,
+        min_transfer_usd: cfg.rebalance.min_transfer_usd,
+        keep_buffer_frac: cfg.rebalance.keep_buffer_pct / rust_decimal::Decimal::from(100),
+        deposit_addresses: cfg.rebalance.deposit_addresses.clone(),
+        hl_account: cfg.rebalance.hyperliquid_account.clone(),
+        hl_usdc_token: token,
+    }
+}
+
+/// Строки базы из заполнений движка.
+pub fn fill_rows(fills: &[(sh_venue_api::Fill, Option<String>)]) -> Vec<sh_store::FillRow> {
+    fills
+        .iter()
+        .map(|(f, pair)| sh_store::FillRow {
+            ts_ms: f.ts_ms,
+            venue: f.venue.to_string(),
+            symbol: f.symbol.clone(),
+            side: match f.side {
+                sh_core::Side::Buy => "buy".into(),
+                sh_core::Side::Sell => "sell".into(),
+            },
+            qty: f.qty.0.to_string(),
+            px: f.px.0.to_string(),
+            fee: f.fee.0.to_string(),
+            maker: f.maker,
+            trade_id: f.trade_id.clone(),
+            cid: f.cid.map(|c| c.0.to_string()),
+            liquidation: f.liquidation,
+            pair_id: pair.clone(),
+        })
+        .collect()
+}
+
 /// Строка базы из записи журнала.
 pub fn ledger_to_row(e: &LedgerEntry) -> LedgerRow {
     to_row(e)

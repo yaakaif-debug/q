@@ -4,7 +4,7 @@
 //!
 //! Защита: режим включается только при `engine.mode = "live"` и флагах
 //! `--live --i-understand-real-money` (проверка в `check_live_gate`). Торговля на
-//! площадке — только при `venues.<площадка>.trading_enabled = true`; Aster — с M4.
+//! площадке — только при `venues.<площадка>.trading_enabled = true` (Aster — с M4).
 //! `--dry-run`: исполнение на симуляторе (как paper), а каждая команда дополнительно
 //! строится и подписывается адаптером с `dry_run = true` и только журналируется.
 
@@ -116,7 +116,22 @@ pub fn build_execs(
             sh_venue_lighter::exec::LtExecConfig::for_network(true, cfg.execution.lighter_signer_lib.clone().into());
         ec.dry_run = dry_run;
         ec.rest.clone_from(&cfg.venues.lighter.rest);
-        out.insert(Exchange::Lighter, Arc::new(sh_venue_lighter::exec::LtExecution::new(ec, &s, meta.clone(), proxy)?));
+        out.insert(
+            Exchange::Lighter,
+            Arc::new(sh_venue_lighter::exec::LtExecution::new(ec, &s, meta.clone(), proxy.clone())?),
+        );
+    }
+    if cfg.venues.aster.trading_enabled {
+        let s = secrets.aster.take().context("venues.aster.trading_enabled but [aster] missing in secrets")?;
+        let mut ec = sh_venue_aster::exec::AsExecConfig::for_network(true);
+        if !cfg.execution.aster_rest.is_empty() {
+            ec.rest.clone_from(&cfg.execution.aster_rest);
+        }
+        if !cfg.execution.aster_ws.is_empty() {
+            ec.ws.clone_from(&cfg.execution.aster_ws);
+        }
+        ec.dry_run = dry_run;
+        out.insert(Exchange::Aster, Arc::new(sh_venue_aster::exec::AsExecution::new(ec, &s, proxy)?));
     }
     Ok(out)
 }
@@ -207,6 +222,7 @@ pub struct LiveState {
     kill_file: PathBuf,
     kill_file_seen: bool,
     last_persist_ms: i64,
+    cfg: AppConfig,
 }
 
 impl LiveState {
@@ -236,6 +252,7 @@ impl LiveState {
             kill_file: PathBuf::from(&cfg.control.kill_file),
             kill_file_seen: false,
             last_persist_ms: 0,
+            cfg: cfg.clone(),
         })
     }
 
@@ -267,6 +284,7 @@ impl LiveState {
         if !out.first_seen.is_empty() {
             self.db.first_seen_insert(&out.first_seen, now_ms).await?;
         }
+        self.db.append_fills(&crate::runner::fill_rows(&out.fills)).await?;
         let rows: Vec<LedgerRow> = out.ledger.iter().map(ledger_to_row).collect();
         self.db.append_ledger(&rows).await?;
         if out.scanned {
@@ -327,6 +345,10 @@ pub async fn live_loop(
                 let resp = match req {
                     CtlRequest::Status => CtlResponse { ok: true, body: st.engine.status_json() },
                     CtlRequest::Command(c) => CtlResponse { ok: true, body: st.engine.on_command(&c, now).into() },
+                    CtlRequest::RebalancePlan { in_transit_usd } => {
+                        let p = crate::runner::plan_params(&st.cfg, st.engine.book().equity(), in_transit_usd);
+                        CtlResponse { ok: true, body: serde_json::to_value(st.engine.rebalance_plan(&p)).unwrap_or_default() }
+                    }
                 };
                 let _ = reply.send(resp);
             }

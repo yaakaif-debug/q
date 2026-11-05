@@ -7,7 +7,8 @@
 **Текущий этап** — см. [PROGRESS.md](PROGRESS.md). Готовы M0 (запись рыночных данных),
 M1 (сканер, теневой портфель, отчёты, Parquet), M2 (движок исполнения, риск, S5, paper,
 backtest, `spread-ctl`, приватные адаптеры, `selftest`) и M3 (live на Hyperliquid + Lighter,
-`--dry-run`, ступень $5k / 2 пары — [docs/live.md](docs/live.md)). Режим по умолчанию —
+`--dry-run`, ступень $5k / 2 пары — [docs/live.md](docs/live.md)) и M4 (Aster в live, ступени
+$25k → $50k → $100k, `spread-ctl rebalance plan`, `spread-ctl export` — [docs/ramp.md](docs/ramp.md)). Режим по умолчанию —
 `paper`: реальных ордеров нет. Живая торговля — только при явном включении оператором
 (`engine.mode = "live"`, флаги `--live --i-understand-real-money` и `trading_enabled = true`
 на площадке).

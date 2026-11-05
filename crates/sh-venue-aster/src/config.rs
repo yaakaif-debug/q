@@ -74,9 +74,7 @@ impl Default for AsterConfig {
 impl AsterConfig {
     /// Проверка настроек.
     pub fn validate(&self) -> Result<(), String> {
-        if self.trading_enabled {
-            return Err("venues.aster.trading_enabled must be false until M4".into());
-        }
+        // trading_enabled = true разрешено с M4; по умолчанию false, торговля — только в live
         if self.streams_per_connection < 2 || self.streams_per_connection > 200 {
             return Err("venues.aster.streams_per_connection must be in 2..=200".into());
         }
@@ -116,6 +114,6 @@ mod tests {
         assert_eq!(c.snapshot_weight(), 2);
         assert!(AsterConfig { snapshot_depth: 30, ..c.clone() }.validate().is_err());
         assert!(AsterConfig { max_connection_age_secs: 86_400, ..c.clone() }.validate().is_err());
-        assert!(AsterConfig { trading_enabled: true, ..c }.validate().is_err());
+        assert!(AsterConfig { trading_enabled: true, ..c }.validate().is_ok());
     }
 }

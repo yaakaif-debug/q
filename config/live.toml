@@ -12,14 +12,16 @@ trading_enabled = false   # true — после selftest на Hyperliquid
 [venues.lighter]
 trading_enabled = false   # true — после selftest на Lighter
 
-# Aster в live — с M4: здесь trading_enabled = true отклоняется проверкой конфига.
+[venues.aster]
+trading_enabled = false   # true — после selftest на Aster (M4)
 
 [database]
 # отдельная база: состояние live не смешивается с paper
 path = "data/state/live.sqlite"
 
 [stage]
-# M3: не больше $5000 капитала в парах и не больше 2 пар
+# Лестница: 5000 (M3, 2 пары) → 25000 → 50000 → 100000. Каждую следующую ступень оператор
+# включает сам после 14 чистых дней на текущей (spread-ctl status → clean_days, без CRIT).
 max_capital_usd = 5000
 max_pairs = 2
 

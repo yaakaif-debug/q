@@ -110,6 +110,8 @@ pub struct EngineOutput {
     pub first_seen: Vec<String>,
     /// Нужны снимки позиций и балансов (сверка).
     pub want_snapshots: bool,
+    /// Заполнения (наши и чужие) с парой — для учёта и экспорта.
+    pub fills: Vec<(sh_venue_api::Fill, Option<String>)>,
 }
 
 /// Сохраняемое состояние движка.
@@ -127,6 +129,12 @@ pub struct EngineState {
     pub next_job: JobId,
     /// Новые входы приостановлены оператором.
     pub paused: bool,
+    /// Время последнего CRIT-оповещения (ступени капитала: «14 чистых дней»).
+    #[serde(default)]
+    pub last_crit_ms: Option<i64>,
+    /// Начало отсчёта чистых дней (первый запуск).
+    #[serde(default)]
+    pub started_ms: Option<i64>,
 }
 
 /// Движок.
@@ -152,6 +160,8 @@ pub struct Engine {
     stream_down: BTreeSet<Exchange>,
     out: EngineOutput,
     now_ms: i64,
+    last_crit_ms: Option<i64>,
+    started_ms: i64,
 }
 
 fn alert(level: AlertLevel, key: impl Into<String>, text: impl Into<String>) -> EngineAlert {
@@ -174,9 +184,27 @@ impl Engine {
             Box::new(CarryStrategy::new(PairKind::S1, strat.s1_rules(), strat.s1_funding_carry.enabled)),
             Box::new(CarryStrategy::new(PairKind::S2, strat.s2_rules(), strat.s2_cross_dex.enabled)),
         ];
-        let (book, mut tracker, jobs, mut risk, next_job, paused) = match state {
-            Some(s) => (s.book, s.tracker, s.jobs, s.risk, s.next_job, s.paused),
-            None => (Book::new(), OrderTracker::new(), BTreeMap::new(), RiskState::new(limits.clone()), 1, false),
+        let (book, mut tracker, jobs, mut risk, next_job, paused, last_crit_ms, started_ms) = match state {
+            Some(s) => (
+                s.book,
+                s.tracker,
+                s.jobs,
+                s.risk,
+                s.next_job,
+                s.paused,
+                s.last_crit_ms,
+                s.started_ms.unwrap_or(now_ms),
+            ),
+            None => (
+                Book::new(),
+                OrderTracker::new(),
+                BTreeMap::new(),
+                RiskState::new(limits.clone()),
+                1,
+                false,
+                None,
+                now_ms,
+            ),
         };
         // ордера, живые на момент остановки, уточняются запросом по клиентскому ID
         tracker.mark_live_unknown();
@@ -201,7 +229,14 @@ impl Engine {
             stream_down: BTreeSet::new(),
             out: EngineOutput::default(),
             now_ms,
+            last_crit_ms,
+            started_ms,
         }
+    }
+
+    /// Полных суток без CRIT-оповещений (с первого запуска или последнего CRIT).
+    pub fn clean_days(&self) -> i64 {
+        (self.now_ms - self.last_crit_ms.unwrap_or(self.started_ms)).max(0) / 86_400_000
     }
 
     /// Состояние для сохранения.
@@ -213,6 +248,8 @@ impl Engine {
             risk: self.risk.clone(),
             next_job: self.next_job,
             paused: self.paused,
+            last_crit_ms: self.last_crit_ms,
+            started_ms: Some(self.started_ms),
         }
     }
 
@@ -342,6 +379,7 @@ impl Engine {
                         .get(&InstrumentKey::new(fill.venue.clone(), fill.symbol.clone()))
                         .and_then(|s| s.mid());
                     let e = self.book.on_fill(&fill, pair.as_deref(), mid);
+                    self.out.fills.push((fill.clone(), pair.clone()));
                     metrics::counter!("fills_total", "venue" => fill.venue.exchange.as_str()).increment(1);
                     metrics::counter!("fees_usd", "venue" => fill.venue.exchange.as_str())
                         .increment(fill.fee.0.abs().to_u64().unwrap_or(0));
@@ -368,6 +406,7 @@ impl Engine {
         let e = self.book.on_fill(f, None, mid);
         self.out.ledger.extend(e);
         let pair = self.book.pair_of(&key).map(|p| p.pair_id.clone());
+        self.out.fills.push((f.clone(), pair.clone()));
         self.out.alerts.push(alert(
             AlertLevel::Crit,
             format!("adl:{}", key.id()),
@@ -561,6 +600,10 @@ impl Engine {
         self.tracker.prune(now_ms, 86_400_000);
         self.book.prune(now_ms, 7 * 86_400_000);
         metrics::gauge!("orders_unknown").set(self.tracker.unknown_count() as f64);
+        if self.out.alerts.iter().any(|a| a.level == AlertLevel::Crit) {
+            self.last_crit_ms = Some(now_ms);
+        }
+        metrics::gauge!("clean_days").set(self.clean_days() as f64);
         std::mem::take(&mut self.out)
     }
 
@@ -1074,6 +1117,57 @@ impl Engine {
         }
     }
 
+    /// План перебалансировки по балансам площадок и марже ног (неподписанные данные).
+    pub fn rebalance_plan(&self, p: &sh_portfolio::rebalance::PlanParams) -> sh_portfolio::rebalance::RebalancePlan {
+        use sh_portfolio::rebalance::{VenueFunds, plan};
+        let market = self.scan.market();
+        let reserve = self.settings.scan.reserve_frac;
+        let ratio = self.settings.scan.strategy.s1_funding_carry.rebalance_margin_ratio;
+        let mut required: BTreeMap<String, Decimal> = BTreeMap::new();
+        for pp in self.book.pairs.values().filter(|x| x.state != Lifecycle::Closed) {
+            for l in &pp.legs {
+                let mark = market.get(&l.key).and_then(|s| s.mark.or_else(|| s.mid())).map(|m| m.0).unwrap_or_default();
+                let margin = l.qty.abs() * mark / l.leverage.max(Decimal::ONE) / (Decimal::ONE - reserve);
+                *required.entry(l.key.venue.to_string()).or_default() += margin;
+            }
+        }
+        let mut funds: BTreeMap<String, VenueFunds> = BTreeMap::new();
+        for b in self.book.balances.values() {
+            let key = b.venue.to_string();
+            let f = funds.entry(key.clone()).or_insert(VenueFunds {
+                venue: b.venue.clone(),
+                equity: Usd(Decimal::ZERO),
+                required: Usd(required.get(&key).copied().unwrap_or_default()),
+                urgent: false,
+            });
+            f.equity.0 += b.equity.0;
+            if let Some(mm) = b.maintenance_margin
+                && b.equity.0 > Decimal::ZERO
+                && mm.0 / b.equity.0 >= ratio
+            {
+                f.urgent = true;
+            }
+        }
+        for (k, r) in &required {
+            if !funds.contains_key(k)
+                && let Some(ik) =
+                    self.book.pairs.values().flat_map(|x| x.legs.iter()).find(|l| &l.key.venue.to_string() == k)
+            {
+                funds.insert(
+                    k.clone(),
+                    VenueFunds {
+                        venue: ik.key.venue.clone(),
+                        equity: Usd(Decimal::ZERO),
+                        required: Usd(*r),
+                        urgent: true,
+                    },
+                );
+            }
+        }
+        let v: Vec<VenueFunds> = funds.into_values().collect();
+        plan(&v, p)
+    }
+
     /// Сводка состояния для `spread-ctl status` (JSON).
     pub fn status_json(&self) -> serde_json::Value {
         let view = self.book_view();
@@ -1083,6 +1177,8 @@ impl Engine {
             "kill": self.risk.kill,
             "halted": self.risk.halted,
             "paused": self.paused,
+            "clean_days": self.clean_days(),
+            "stage": self.settings.stage,
             "degraded": self.risk.degraded,
             "equity_usd": view.equity.0.round_dp(2).to_string(),
             "peak_equity_usd": view.peak_equity.0.round_dp(2).to_string(),

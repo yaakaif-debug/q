@@ -10,7 +10,7 @@ pub mod parquet_out;
 pub mod reader;
 pub mod recorder;
 
-pub use db::{Db, DbError, LedgerRow};
+pub use db::{Db, DbError, FillRow, LedgerRow};
 pub use inspect::{GapReport, VenueGapReport, inspect_files};
 pub use layout::{FORMAT, FileHeader, RecordLine, hour_path};
 pub use reader::{ReadError, read_file};
