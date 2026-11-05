@@ -87,3 +87,33 @@ Asset id для HIP-3 = `100000 + perp_dex_index * 10000 + index_in_meta`.
 - У `allDexsAssetCtxs` нет формальной схемы в документации (разбор по живым записям).
 - Учитываются ли подписки `bbo` и `l2Book` на монеты HIP-3 в тот же лимит 1000, что и ядро (считаем, что да: лимит сформулирован на IP).
 - Смысл букв `side` в сделках.
+
+## Приватный API (M2)
+
+Адаптер `sh-venue-hyperliquid::exec` (код написан, на площадке не проверялся — проверку
+делает оператор через `selftest`).
+
+- **Подпись L1-действий** агент-кошельком: `keccak256(msgpack(action) ‖ nonce (8 байт BE) ‖ 0x00)` →
+  `Agent { source: "a"|"b", connectionId }` → EIP-712, домен `Exchange`, версия `1`, chainId 1337,
+  нулевой `verifyingContract` ([Signing](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/signing),
+  `utils/signing.py` SDK). Кодер msgpack и EIP-712 написаны в репозитории; тесты сверяют их с
+  тест-векторами `tests/signing_test.py` официального SDK (хеш действия, подписи mainnet/testnet,
+  ордер с `cloid` и без, vault). Агент не может выводить средства.
+- **Nonce**: миллисекунды, строго возрастают (атомарный счётчик), общий для ядра и всех HIP-3 дексов.
+- **Ордер**: `{"type":"order","orders":[{a,b,p,s,r,t,c}],"grouping":"na"}`; `t.limit.tif` — `Alo`
+  (post-only), `Ioc`, `Gtc`; `a` — asset id (`100000 + dex_index × 10000 + i` для HIP-3); `c` — `cloid`.
+  Ответ: `resting` → Acked, `filled` → Filled/Cancelled по объёму, `error` → Rejected.
+- **Отмена**: `cancelByCloid`; отмена всех — `openOrders` по каждому дексу и `cancel` по `oid`
+  (отдельного «cancel all» для пользователя нет).
+- **Запрос по клиентскому ID**: `info {"type":"orderStatus","user","oid": cloid}`; `unknownOid` → ордер неизвестен.
+- **Позиции и балансы**: `clearinghouseState` с параметром `dex` по каждому дексу из `execution.hyperliquid_dexes`.
+- **Фандинг**: `userFunding` с `startTime` (UNVERIFIED: включает ли он HIP-3 дексы без параметра `dex`).
+- **Перевод между дексами**: `agentSendAsset` (подписывается агентом, получатель — свой адрес,
+  `""` — USDC-декс ядра). Токен по умолчанию — `USDC:0x6d1e7cde53ba9467b783cb7c530ce054` (mainnet),
+  `USDC:0xeb62eee3685fc4c43992febcd9e75443` (testnet, **UNVERIFIED**); порядок ключей действия —
+  как в документации (**UNVERIFIED**: тест-вектора в SDK нет).
+- **Приватный поток**: подписки `orderUpdates`, `userFills` (снимок при подписке игнорируется),
+  `userFundings`; пинг `{"method":"ping"}`. Мейкер — `crossed = false` (**UNVERIFIED**),
+  ликвидация — непустое поле `liquidation` (**UNVERIFIED**).
+- **Лимит**: один лимитер 1200 веса в минуту на все дексы (адрес и IP общие).
+- S2: ноги на двух дексах отправляются отдельными действиями; атомарность не предполагается.

@@ -94,3 +94,38 @@ Lighter from a restricted jurisdiction..."}`; `?readonly=true` работает.
 - Сторона агрессора по `is_maker_ask`.
 - Считаются ли управляющие кадры ping WebSocket в лимит 200 сообщений в минуту.
 - Единицы `min_initial_margin_fraction`: 200 трактуется как 2% → максимальное плечо 50.
+
+## Приватный API (M2)
+
+Адаптер `sh-venue-lighter::exec` и FFI `sh-venue-lighter::signer` (код написан, на площадке
+не проверялся).
+
+- **Подписант**: официальная библиотека `lighter-go` (`signers/lighter-signer-linux-amd64.so`,
+  путь — `execution.lighter_signer_lib`). Загружается через `libloading`; это единственный модуль
+  с `unsafe` в репозитории, каждый блок описан. Сигнатуры `CreateClient`, `SignCreateOrder`
+  (19 аргументов), `SignCancelOrder`, `SignCancelAllOrders`, `CreateAuthToken`, `Free` — по
+  `argtypes` Python SDK (**UNVERIFIED** для конкретной сборки: оператор сверяет версию
+  библиотеки с SDK). Вызовы сериализуются мьютексом.
+- **Ключ**: отдельный индекс API-ключа; ключ L1 на сервер не попадает. Какие транзакции может
+  подписать API-ключ: в списке функций подписанта есть `SignWithdraw` и `SignTransfer` — значит,
+  API-ключ технически может подписать вывод (**UNVERIFIED**, требует ли вывод дополнительно
+  подпись L1). Поэтому: держите на Lighter ограниченный баланс; адаптер вызывает только
+  создание и отмену ордеров и токен авторизации.
+- **Chain ID**: testnet 300 (SPEC.md), mainnet 304 (**UNVERIFIED**).
+- **Nonce** на API-ключ: начальное значение `GET /api/v1/nextNonce`, дальше локальный счётчик;
+  ответ `sendTx` с упоминанием nonce сбрасывает счётчик к значению площадки.
+- **Ордер**: `SignCreateOrder` (лимитный; TIF: 0 — IOC с `order_expiry = 0`, 1 — GTT, 2 — post-only,
+  срок −1 = 28 дней) → `POST /api/v1/sendTx` (`application/x-www-form-urlencoded`, `tx_type`,
+  `tx_info`, `price_protection = true`). Количество и цена — целые в единицах
+  `10^-size_decimals` / `10^-price_decimals`. `sendTx` подтверждает приём, исполнение приходит в потоке.
+- **Отмена**: индекс ордера ищется в `accountActiveOrders` по `client_order_index`, затем
+  `SignCancelOrder`; отмена всех — `SignCancelAllOrders` (немедленно, все рынки; индекс 255 — **UNVERIFIED**).
+- **Запрос по клиентскому ID**: `accountActiveOrders`, затем `accountInactiveOrders` (**UNVERIFIED**).
+- **Позиции и баланс**: `GET /api/v1/account?by=index&value=…` (`positions`, `available_balance`,
+  `total_asset_value` — **UNVERIFIED**).
+- **Фандинг**: `GET /api/v1/positionFunding` (поля и единицы времени — **UNVERIFIED**).
+- **Приватный поток**: `account_all_orders/{id}`, `account_all_trades/{id}`, `account_all_positions/{id}`
+  с токеном `auth` (`CreateAuthToken`, срок 7 ч для потока и 10 мин для REST). Сторона сделки —
+  по `bid_account_id`/`ask_account_id`, клиентский ID — `bid_client_id`/`ask_client_id`, мейкер —
+  по `is_maker_ask`; комиссия `maker_fee`/`taker_fee` трактуется как миллионные доли номинала
+  (**UNVERIFIED**); тип сделки не `trade` — ликвидация или ADL.
