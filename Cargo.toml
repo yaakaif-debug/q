@@ -130,6 +130,11 @@ rustls-native-certs.workspace = true
 [lints]
 workspace = true
 
+# Отладочная информация в dev выключена: тестовых бинарников много, и с ней
+# каталог target занимает десятки гигабайт.
+[profile.dev]
+debug = 0
+
 [profile.release]
 lto = "fat"
 codegen-units = 1

@@ -533,10 +533,7 @@ impl SimCore {
                 continue;
             }
             // сделка должна быть со стороны, которая бьёт по нашему ордеру
-            let side_ok = match (o.req.side, taker) {
-                (Side::Buy, Some(Side::Buy)) | (Side::Sell, Some(Side::Sell)) => false,
-                _ => true,
-            };
+            let side_ok = !matches!((o.req.side, taker), (Side::Buy, Some(Side::Buy)) | (Side::Sell, Some(Side::Sell)));
             let through = match o.req.side {
                 Side::Buy => px <= o.req.px.0,
                 Side::Sell => px >= o.req.px.0,
