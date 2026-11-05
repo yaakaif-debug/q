@@ -11,6 +11,7 @@ pub mod events;
 pub mod exec;
 pub mod funding;
 pub mod meta;
+pub mod private_ws;
 pub mod rest;
 pub mod sink;
 pub mod subs;

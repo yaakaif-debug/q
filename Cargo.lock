@@ -4620,6 +4620,7 @@ name = "sh-venue-hyperliquid"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "chrono",
  "metrics",
  "reqwest",
  "rust_decimal",
