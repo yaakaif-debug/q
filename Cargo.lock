@@ -4614,8 +4614,12 @@ dependencies = [
 name = "sh-venue-aster"
 version = "0.1.0"
 dependencies = [
+ "alloy",
+ "chrono",
  "metrics",
+ "reqwest",
  "rust_decimal",
+ "secrecy",
  "serde",
  "serde_json",
  "sh-core",

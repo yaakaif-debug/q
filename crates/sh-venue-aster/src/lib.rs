@@ -2,6 +2,7 @@
 //! без EIP-712 и подписанных запросов.
 
 pub mod config;
+pub mod exec;
 pub mod feed;
 pub mod normalize;
 pub mod replay;
