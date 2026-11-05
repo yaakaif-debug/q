@@ -1,5 +1,7 @@
 //! Подписки Lighter.
 
+#![forbid(unsafe_code)]
+
 use serde_json::json;
 
 /// Подписка; порядок вариантов — приоритет.

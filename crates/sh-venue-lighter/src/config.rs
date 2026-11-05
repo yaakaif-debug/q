@@ -1,5 +1,7 @@
 //! Настройки адаптера Lighter. Неизвестные ключи — ошибка.
 
+#![forbid(unsafe_code)]
+
 use serde::Deserialize;
 
 /// Настройки `[venues.lighter]`.

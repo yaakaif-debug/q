@@ -1,6 +1,8 @@
 //! Повтор записанных сообщений Lighter: метаданные из `orderBookDetails`, интервалы из
 //! `fundings` и `market_stats`, стаканы с той же проверкой `nonce`, что у живого адаптера.
 
+#![forbid(unsafe_code)]
+
 use std::collections::HashMap;
 
 use sh_core::{Exchange, RawRecord, RawSource, SysEvent};

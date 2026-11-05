@@ -1,6 +1,8 @@
 //! Типы сообщений Lighter как их присылает площадка.
 //! Источник: docs/venues/lighter.md (документация и живые ответы 2026-10-29).
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 
 use rust_decimal::Decimal;

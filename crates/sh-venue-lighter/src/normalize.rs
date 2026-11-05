@@ -1,5 +1,7 @@
 //! Преобразование сообщений Lighter в нормализованные события и метаданные.
 
+#![forbid(unsafe_code)]
+
 use rust_decimal::Decimal;
 use sh_core::{Collateral, Exchange, Level, Px, Qty, RecvTs, Side, Usd, VenueKey};
 use sh_md::{BookDelta, DeltaSeq};

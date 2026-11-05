@@ -2,6 +2,8 @@
 //! (разрыв → отписка и повторная подписка ради нового снимка), опрос метаданных
 //! и вывод интервала фандинга.
 
+#![forbid(unsafe_code)]
+
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;

@@ -28,7 +28,7 @@ pub use exec::{
 };
 pub use funding::{FundingIntervalTracker, infer_interval_ms};
 pub use meta::{FeeInfo, FeeSource, InstrumentMeta, InstrumentStatus, PriceRule, Rounding};
-pub use rest::{RestClient, WeightLimiter};
+pub use rest::{RestClient, WeightLimiter, form_urlencode};
 pub use sink::Sinks;
 pub use subs::{PlanDiff, SubPlan};
 pub use venue::{MarketDataVenue, Replay, query_param, rest_body};
