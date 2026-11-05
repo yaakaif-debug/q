@@ -123,3 +123,40 @@ mod tests {
         assert!(start.elapsed() >= Duration::from_millis(80));
     }
 }
+
+/// Кодирование `application/x-www-form-urlencoded` как `urllib.parse.urlencode` в Python
+/// (буквы, цифры и `_.-~` без изменений, пробел — `+`, остальное — `%XX`). Порядок пар
+/// сохраняется: по этой строке Aster считает подпись.
+pub fn form_urlencode(pairs: &[(&str, String)]) -> String {
+    fn enc(s: &str, out: &mut String) {
+        for b in s.bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-' | b'~' => out.push(char::from(b)),
+                b' ' => out.push('+'),
+                _ => out.push_str(&format!("%{b:02X}")),
+            }
+        }
+    }
+    let mut out = String::new();
+    for (i, (k, v)) in pairs.iter().enumerate() {
+        if i > 0 {
+            out.push('&');
+        }
+        enc(k, &mut out);
+        out.push('=');
+        enc(v, &mut out);
+    }
+    out
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::*;
+
+    #[test]
+    fn matches_python_urlencode() {
+        // urllib.parse.urlencode({"symbol": "BTCUSDT", "x": "a b/c", "l": "[\"1\"]"})
+        let s = form_urlencode(&[("symbol", "BTCUSDT".into()), ("x", "a b/c".into()), ("l", "[\"1\"]".into())]);
+        assert_eq!(s, "symbol=BTCUSDT&x=a+b%2Fc&l=%5B%221%22%5D");
+    }
+}

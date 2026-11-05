@@ -2,7 +2,7 @@
 # Наложение окружения: --overlay config/live.toml; переменные SH_<SECTION>__<KEY>.
 
 [engine]
-mode = "scan"              # record | scan (M1); paper (M2) и live (M3) появятся в следующих этапах
+mode = "paper"             # record | scan | paper (по умолчанию); live появится в M3
 equity_reserve_pct = 15    # резерв капитала вне площадок, %
 
 [recorder]
@@ -173,3 +173,24 @@ source = "none"
 enabled = false            # токен и чат — в секретах ([telegram] bot_token, chat_id)
 dedupe_secs = 300
 per_minute = 20
+
+[paper]
+# Симулированные площадки для paper и backtest (SPEC.md, «Paper and dry-run»).
+cash_usd = { hyperliquid = 40000, lighter = 30000, aster = 30000 }
+# RTT до площадок, мс: подставьте значения из отчёта latency-probe с боевого хоста.
+rtt_ms = { hyperliquid = 10, lighter = 10, aster = 10 }
+tick_ms = 1000
+
+[control]
+socket = "run/spread-hunter.sock"
+# Появление файла включает kill switch; содержимое "flatten" — со сбросом позиций.
+kill_file = "run/KILL"
+
+[execution]
+# Приватные адаптеры (M2+). Ключей здесь нет: они в зашифрованном файле секретов.
+lighter_signer_lib = "signers/lighter-signer-linux-amd64.so"
+# Дексы Hyperliquid, по которым читаются позиции и балансы ("" — ядро).
+hyperliquid_dexes = [""]
+hyperliquid_usdc_token = ""   # пусто — значение по сети (docs/venues/hyperliquid.md)
+aster_rest = ""               # пусто — https://fapi3.asterdex.com
+aster_ws = ""                 # пусто — wss://fstream.asterdex.com

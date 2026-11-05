@@ -17,6 +17,11 @@ serde_json.workspace = true
 rust_decimal.workspace = true
 tracing.workspace = true
 metrics.workspace = true
+alloy.workspace = true
+reqwest.workspace = true
+secrecy.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
 
 [lints]
 workspace = true

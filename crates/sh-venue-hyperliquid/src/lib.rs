@@ -3,9 +3,11 @@
 //! Подписи, приватные эндпоинты и ордера в M0 отсутствуют.
 
 pub mod config;
+pub mod exec;
 pub mod feed;
 pub mod normalize;
 pub mod replay;
+pub mod sign;
 pub mod subs;
 pub mod wire;
 

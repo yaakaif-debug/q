@@ -15,8 +15,8 @@
 | Этап | Ветка | База | PR | Статус |
 | --- | --- | --- | --- | --- |
 | M0 | `claude/lucid-mccarthy-gx3vbm` | `main` | #1 | готов, ждёт слияния |
-| M1 | `claude/m1-scanner` | M0 | см. ниже | код готов, PR открыт |
-| M2 | `claude/m2-execution` | M1 | — | в работе |
+| M1 | `claude/m1-scanner` | M0 | #2 | код готов, PR открыт |
+| M2 | `claude/m2-execution` | M1 | #3 | код готов, PR открыт |
 | M3 | `claude/m3-live-hl-lighter` | M2 | — | не начат |
 | M4 | `claude/m4-aster-ramp` | M3 | — | не начат |
 
@@ -77,10 +77,42 @@
 - Документация: `docs/scanner.md`; systemd: `spread-hunter.service`, таймер Parquet.
 - Не делалось (по правилам): приёмочный 30-дневный прогон — его запускает оператор.
 
-### M2 — следующий шаг
+### M2 — готово (код и офлайн-тесты)
 
-Начать с ветки `claude/m2-execution` от `claude/m1-scanner`. Порядок: трейт `Execution`
-и типы ордеров → `sh-sim` (симулятор площадки) → `sh-exec` (автомат ордера, S5) →
-`sh-risk` → `sh-strategy` (S1/S2 поверх `sh-signals::evaluate`) → портфель позиций и
-сверка → режим `paper` → приватные адаптеры (HL, Lighter FFI, Aster) → `selftest` →
-`spread-ctl` → `backtest`.
+- `sh-venue-api::exec` — трейт `Execution`, ордера, клиентские ID, команды/результаты;
+  `eip712` (домен, хеш структуры, подписант), `private_ws` (приватный поток), `form_urlencode`.
+- `sh-sim` — симулятор площадок (тейкер по стакану с задержкой, мейкер по очереди, фандинг,
+  режимы отказа `Down`/`LostReplies`/`Blackout`, ADL, восстановление позиций) и `SimExecution`.
+- `sh-exec` — `OrderTracker` (только подтверждённые переходы, `Unknown` → запрос) и `PairJob` (S5).
+- `sh-risk`, `sh-strategy` (S1/S2), `sh-portfolio::book` (жизненный цикл, сверка, атрибуция).
+- Корень: `engine` (синхронный движок), `simdrive` (движок + симулятор), `trade` (цикл paper),
+  `ctl` (сокет и команды Telegram), `backtest`, `selftest`; бинарники `spread-ctl`, `backtest`;
+  `spread-hunter selftest`.
+- Приватные адаптеры: Hyperliquid (подпись L1 по тест-векторам SDK, nonce, `agentSendAsset`),
+  Lighter (FFI к `lighter-go`, единственный модуль с `unsafe`), Aster (EIP-712 API-кошелька).
+- Конфиг: `engine.mode = "paper"` по умолчанию, секции `[paper]`, `[control]`, `[execution]`.
+- Документация: `docs/execution.md`, разделы «Приватный API (M2)» в `docs/venues/*.md`.
+- Проверки: fmt, clippy `-D warnings`, 234 теста, cargo-deny, cargo-audit (исключения для
+  транзитивных крейтов alloy описаны в `deny.toml` и `.cargo/audit.toml`).
+- Не делалось (по правилам): 14 дней paper, учения на живых площадках, `selftest` — запускает оператор.
+- Отложено: горячая перезагрузка порогов (`spread-ctl reload`), автоматическая перебалансировка
+  маржи между дексами S2 (сейчас — оповещение), цена ликвидации в paper (симулятор её не считает).
+
+### M3 — следующий шаг
+
+Ветка `claude/m3-live-hl-lighter` от `claude/m2-execution`. План:
+
+1. Режим `live` в `config.rs` (`AVAILABLE_MODES` + проверка: `engine.mode = "live"` требует флагов
+   `--live --i-understand-real-money` у `spread-hunter run`; без них — отказ с понятной ошибкой).
+   Снять запрет `trading_enabled = true` в `venues.*.validate()` для Hyperliquid и Lighter
+   (Aster — только в M4), значение по умолчанию остаётся `false`.
+2. Оболочка live (`src/live.rs`): движок + `Arc<dyn Execution>` по семействам; команды движка
+   исполняются в задачах tokio, результаты возвращаются как `ExecInput` по каналу; приватные потоки;
+   снимки позиций и балансов по расписанию `reconcile_every_s`; общий `MetaRegistry` из событий
+   метаданных; старт только после сверки (уже в движке).
+3. `live --dry-run`: адаптеры с `dry_run = true` (подписывают и журналируют, не отправляют),
+   исполнение — симулятор (как paper), чтобы движок жил.
+4. Ступень M3: `StageCaps { max_capital_usd: 5000, max_pairs: 2 }` из `config/live.toml`;
+   только Hyperliquid (ядро + HIP-3) и Lighter.
+5. `config/live.toml` (наложение), systemd unit для live, инструкции оператору.
+6. Тесты: live-оболочка против `SimExecution` (как адаптера), отказ флагов, dry-run.

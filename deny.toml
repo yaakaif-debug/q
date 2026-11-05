@@ -6,6 +6,16 @@ all-features = false
 [advisories]
 version = 2
 yanked = "deny"
+# Исключения с обоснованием (пересматривать при каждом обновлении alloy):
+# - RUSTSEC-2026-0387: crypto-bigint 0.5 (через k256 0.13 в alloy-signer-local). Подпись
+#   выполняется локально на сервере; удалённого измерения времени отдельных операций
+#   подписи нет. Обновление требует k256 0.14 в alloy — ждём релиз.
+# - RUSTSEC-2024-0436: paste не поддерживается; это proc-macro времени компиляции
+#   (alloy-primitives), в исполняемом коде его нет.
+ignore = [
+    { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 via alloy k256; local signing only, no remote timing oracle; upgrade blocked on alloy" },
+    { id = "RUSTSEC-2024-0436", reason = "paste is a compile-time proc-macro used by alloy-primitives" },
+]
 
 [licenses]
 version = 2

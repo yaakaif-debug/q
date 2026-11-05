@@ -4,9 +4,11 @@
 Полная спецификация — в [SPEC.md](SPEC.md); заметки по API площадок — в
 [docs/venues/](docs/venues/).
 
-**Текущий этап** — см. [PROGRESS.md](PROGRESS.md). Готовы M0 (запись рыночных данных)
-и M1 (сканер, теневой портфель, отчёты, Parquet). Торговли нет: ордера появятся в M2,
-живая торговля — в M3 и только при явном включении оператором.
+**Текущий этап** — см. [PROGRESS.md](PROGRESS.md). Готовы M0 (запись рыночных данных),
+M1 (сканер, теневой портфель, отчёты, Parquet) и M2 (движок исполнения, риск, S5, paper,
+backtest, `spread-ctl`, приватные адаптеры, `selftest`). Режим по умолчанию — `paper`:
+реальных ордеров нет. Живая торговля — с M3 и только при явном включении оператором
+(`engine.mode = "live"` и флаги `--live --i-understand-real-money`).
 
 Claude Code пишет код и офлайн-тесты; приёмку, testnet и live оператор запускает сам
 (SPEC.md, «Testing responsibility»).
@@ -24,16 +26,23 @@ Claude Code пишет код и офлайн-тесты; приёмку, testne
 | `sh-store` | Сырой рекордер (zstd JSONL по площадке и часу UTC), чтение, отчёт о разрывах, SQLite (WAL), таблицы Parquet |
 | `sh-obs` | JSON-логи (stdout и ежедневный файл), экспорт Prometheus на `127.0.0.1:9464`, оповещения Telegram |
 | `sh-signals` | APR фандинга, оценки спреда, модель издержек, `s_net`, ROC, точка безубыточности, размер позиции, сопоставление символов, календари сессий, оценка пар |
-| `sh-portfolio` | Теневой портфель M1 и дневные отчёты |
+| `sh-portfolio` | Теневой портфель M1, дневные отчёты, книга позиций M2 (жизненный цикл пар, сверка, атрибуция PnL) |
+| `sh-sim` | Симулятор площадок: тейкер по стакану с задержкой, мейкер по очереди, фандинг, режимы отказа |
+| `sh-exec` | Автомат состояний ордера, задача пары S5 (мейкер-первый вход, хедж, разворот) |
+| `sh-risk` | Проверки перед входом и ордером, мониторы, kill switch |
+| `sh-strategy` | Трейт `Strategy`, S1 и S2 |
 
-Бинарники: `spread-hunter` (`run`, `scan --replay`, `derive`, `metadata`, `inspect`, `dump`)
-и `latency-probe`. Подробности M1 — [docs/scanner.md](docs/scanner.md).
+Бинарники: `spread-hunter` (`run`, `scan --replay`, `derive`, `selftest`, `metadata`,
+`inspect`, `dump`), `spread-ctl`, `backtest` и `latency-probe`. Подробности M1 —
+[docs/scanner.md](docs/scanner.md), M2 — [docs/execution.md](docs/execution.md).
 
 ## Режимы
 
 `engine.mode` в конфиге: `record` — только запись; `scan` — запись, сканер раз в минуту,
-теневой портфель на $100k, дневные отчёты в `reports/`. Сырые записи в любом режиме пишутся
-при `recorder.enabled = true` (по умолчанию).
+теневой портфель на $100k, дневные отчёты в `reports/`; `paper` (по умолчанию) — сканер,
+стратегии S1/S2, риск и исполнение S5 на симуляторе с живыми данными, состояние в SQLite,
+`spread-ctl` и kill switch. Сырые записи в любом режиме пишутся при `recorder.enabled = true`
+(по умолчанию). `trading_enabled` у всех площадок `false`; в M2 он не нужен (paper не торгует).
 
 ## Сборка и проверки
 
@@ -69,6 +78,21 @@ cargo test --workspace
 
 ```bash
 ./target/release/spread-hunter derive --date 2026-11-01
+```
+
+Бэктест, управление и проверка приватных адаптеров (selftest ставит реальные малые
+ордера — запускает только оператор, см. [docs/execution.md](docs/execution.md)):
+
+```bash
+./target/release/backtest --replay data/raw --from 2026-11-01 --to 2026-11-08
+```
+
+```bash
+./target/release/spread-ctl status
+```
+
+```bash
+./target/release/spread-hunter selftest --network testnet --max-notional-usd 20
 ```
 
 ## Рекордер
@@ -141,7 +165,7 @@ sudo mkdir -p /opt/spread-hunter/{bin,config,data,run,reports}
 ```
 
 ```bash
-sudo cp target/release/spread-hunter target/release/latency-probe /opt/spread-hunter/bin/
+sudo cp target/release/spread-hunter target/release/spread-ctl target/release/backtest target/release/latency-probe /opt/spread-hunter/bin/
 ```
 
 ```bash
@@ -185,15 +209,34 @@ curl -s 127.0.0.1:9464/metrics
 
 Ключей в репозитории нет. Секреты — один TOML-файл (пример ниже), зашифрованный на
 сервере и расшифровываемый при старте: systemd `LoadCredentialEncrypted` (основной
-способ) или внешняя команда, например `age -d`, которая спросит пароль. В M1 нужен только
-Telegram (по желанию); ключи площадок понадобятся с M2.
+способ) или внешняя команда, например `age -d`, которая спросит пароль. Для `paper` нужен
+только Telegram (по желанию); ключи площадок нужны для `selftest` и live (M3). На сервер
+кладутся только ключи, которые могут торговать, но не выводить средства.
 
 ```toml
 [telegram]
 bot_token = "123456:ABC..."
 chat_id = "-1001234567890"
-allowed_user_ids = [111111111]
+allowed_user_ids = [111111111]   # кто может слать /kill и /status
+
+[hyperliquid]
+account_address = "0x…"          # основной аккаунт (ключ на аппаратном кошельке)
+agent_private_key = "0x…"        # агент-кошелёк, одобренный основным: торгует, не выводит
+
+[lighter]
+account_index = 12345
+api_key_index = 3                # отдельный индекс API-ключа; ключ L1 сюда не кладётся
+api_private_key = "…"
+
+[aster]
+user = "0x…"                     # основной кошелёк
+signer = "0x…"                   # API-кошелёк
+signer_private_key = "0x…"
 ```
+
+Библиотеку подписанта Lighter (`lighter-signer-linux-amd64.so` из официального
+`lighter-go`/Python SDK) положите в `/opt/spread-hunter/signers/` и укажите путь в
+`[execution] lighter_signer_lib`.
 
 Шифрование для systemd (файл с открытым текстом после этого удалить):
 

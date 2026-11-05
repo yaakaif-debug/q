@@ -11,7 +11,7 @@ pub mod venue;
 
 pub use clock::{Clock, ManualClock, RecvTs, SystemClock};
 pub use error::CoreError;
-pub use num::{Bps, Px, Qty, Usd};
+pub use num::{Bps, PositionChange, Px, Qty, Usd, apply_fill};
 pub use raw::{RawRecord, RawSource, SysEvent};
 pub use rust_decimal::Decimal;
 pub use secrets::{Secrets, SecretsError, SecretsSource};

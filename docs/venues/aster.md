@@ -88,3 +88,31 @@ M0 подписывается через URL комбинированного п
 - Вес `openInterest`.
 - Максимум соединений WebSocket на IP.
 - Доступен ли `@depth@100ms` для всех символов (документация: «100 ms (if existing)»).
+
+## Приватный API (M2)
+
+Адаптер `sh-venue-aster::exec` (код написан, на площадке не проверялся).
+
+- **Ключи**: API-кошелёк (`signer`), авторизованный основным кошельком (`user`). Вывод через API
+  требует подписи основного кошелька, поэтому подписант сам вывести средства не может.
+  Срок действия и точные права подписанта — **UNVERIFIED**; оператор проверяет их на странице
+  API-кошелька Aster.
+- **Подпись** (Aster API v3, «Authentication signature payload»): строка параметров в порядке
+  отправки (`urllib.parse.urlencode`), к ней добавляются `nonce` (микросекунды), `user`, `signer`;
+  EIP-712 `Message { string msg }`, домен `AsterSignTransaction`, версия `1`, chainId 1666, нулевой
+  `verifyingContract`; подпись — `0x` + 65 байт `r‖s‖v` в параметре `signature`. Включение `user`
+  в строку (в примере документации его нет) и формат `signature` — **UNVERIFIED**. Тест проверяет,
+  что подпись восстанавливается в адрес API-кошелька и что ключ соответствует `signer`.
+- **Nonce**: микросекунды, строго возрастают; окно площадки ±60 с, последние 100 nonce на агента.
+- **Хост**: `https://fapi3.asterdex.com` (как в примере документации v3, **UNVERIFIED**); testnet-хосты —
+  **UNVERIFIED**, задаются в `execution.aster_rest` / `execution.aster_ws`.
+- **Эндпоинты** (Binance-совместимые): `POST /fapi/v3/order` (`timeInForce` `GTX` — post-only, `IOC`,
+  `GTC`; `newClientOrderId`), `DELETE /fapi/v3/order`, `GET /fapi/v3/openOrders` и
+  `DELETE /fapi/v3/allOpenOrders` по символам (отмена всех), `GET /fapi/v3/order` (код −2013 —
+  ордер неизвестен), `GET /fapi/v3/positionRisk`, `GET /fapi/v3/balance`, `GET /fapi/v3/income`
+  (`FUNDING_FEE`), `POST /fapi/v3/listenKey`.
+- **Пользовательский поток**: `wss://fstream.asterdex.com/ws/<listenKey>`, событие
+  `ORDER_TRADE_UPDATE` (заполнение при `x = TRADE`). Новый listenKey при каждом подключении,
+  продление не делается (**UNVERIFIED**: срок жизни ключа). `ACCOUNT_UPDATE` не используется —
+  позиции берутся REST-снимком для сверки.
+- **Обеспечение** — по активу баланса (USDT, USDC, USD1, U); капитал = `balance + crossUnPnl`.

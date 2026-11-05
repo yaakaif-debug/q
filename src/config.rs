@@ -51,6 +51,87 @@ pub struct AppConfig {
     pub secrets: SecretsConfig,
     /// Telegram.
     pub telegram: TelegramConfig,
+    /// Симуляция paper и backtest.
+    pub paper: PaperConfig,
+    /// Управление (сокет spread-ctl, файл kill switch).
+    pub control: ControlConfig,
+    /// Приватное исполнение (адаптеры, подписанты).
+    pub execution: ExecutionConfig,
+}
+
+/// Настройки `[execution]` приватных адаптеров.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct ExecutionConfig {
+    /// Библиотека подписанта Lighter (`linux-amd64.so` на сервере, `darwin-arm64.dylib` локально).
+    pub lighter_signer_lib: String,
+    /// Дексы Hyperliquid для позиций и балансов (`""` — ядро).
+    pub hyperliquid_dexes: Vec<String>,
+    /// Токен USDC для `agentSendAsset` (пусто — по сети).
+    pub hyperliquid_usdc_token: String,
+    /// REST Aster v3 для подписанных запросов (пусто — по сети).
+    pub aster_rest: String,
+    /// WebSocket Aster для пользовательского потока (пусто — по сети).
+    pub aster_ws: String,
+}
+
+impl Default for ExecutionConfig {
+    fn default() -> Self {
+        Self {
+            lighter_signer_lib: "signers/lighter-signer-linux-amd64.so".into(),
+            hyperliquid_dexes: vec![String::new()],
+            hyperliquid_usdc_token: String::new(),
+            aster_rest: String::new(),
+            aster_ws: String::new(),
+        }
+    }
+}
+
+/// Настройки `[paper]`: симулированные площадки для paper и backtest.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct PaperConfig {
+    /// Начальный капитал по семействам площадок, $ (для Hyperliquid — на ядре; HIP-3
+    /// дексы в симуляции берут маржу из общего капитала, переводы не моделируются).
+    pub cash_usd: std::collections::BTreeMap<String, Decimal>,
+    /// RTT до площадок, мс (из отчёта latency-probe оператора).
+    pub rtt_ms: std::collections::BTreeMap<String, i64>,
+    /// Период такта движка, мс.
+    pub tick_ms: i64,
+}
+
+impl Default for PaperConfig {
+    fn default() -> Self {
+        Self {
+            cash_usd: std::collections::BTreeMap::from([
+                ("hyperliquid".to_owned(), dec!(40000)),
+                ("lighter".to_owned(), dec!(30000)),
+                ("aster".to_owned(), dec!(30000)),
+            ]),
+            rtt_ms: std::collections::BTreeMap::from([
+                ("hyperliquid".to_owned(), 10),
+                ("lighter".to_owned(), 10),
+                ("aster".to_owned(), 10),
+            ]),
+            tick_ms: 1000,
+        }
+    }
+}
+
+/// Настройки `[control]`.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct ControlConfig {
+    /// Unix-сокет `spread-ctl`.
+    pub socket: String,
+    /// Файл kill switch: его появление включает kill switch (содержимое `flatten` — со сбросом).
+    pub kill_file: String,
+}
+
+impl Default for ControlConfig {
+    fn default() -> Self {
+        Self { socket: "run/spread-hunter.sock".into(), kill_file: "run/KILL".into() }
+    }
 }
 
 /// Настройки `[symbols]`.
@@ -125,7 +206,7 @@ impl Default for TelegramConfig {
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields, default)]
 pub struct EngineConfig {
-    /// Режим: `record`, `scan` (с M1), `paper` (с M2), `live` (с M3).
+    /// Режим: `record`, `scan` (с M1), `paper` (с M2, по умолчанию), `live` (с M3).
     pub mode: String,
     /// Резерв капитала вне площадок, %.
     pub equity_reserve_pct: Decimal,
@@ -133,12 +214,12 @@ pub struct EngineConfig {
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        Self { mode: "scan".into(), equity_reserve_pct: dec!(15) }
+        Self { mode: "paper".into(), equity_reserve_pct: dec!(15) }
     }
 }
 
 /// Режимы, доступные в текущем этапе.
-pub const AVAILABLE_MODES: &[&str] = &["record", "scan"];
+pub const AVAILABLE_MODES: &[&str] = &["record", "scan", "paper"];
 
 /// Настройки `[network]`.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -220,6 +301,14 @@ impl AppConfig {
         self.venues.lighter.validate()?;
         self.venues.aster.validate()?;
         self.network.proxy()?;
+        for k in self.paper.cash_usd.keys().chain(self.paper.rtt_ms.keys()) {
+            if k.parse::<sh_core::Exchange>().is_err() {
+                return Err(format!("paper: unknown venue '{k}'"));
+            }
+        }
+        if self.paper.tick_ms <= 0 {
+            return Err("paper.tick_ms must be positive".into());
+        }
         Ok(())
     }
 }

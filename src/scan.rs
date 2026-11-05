@@ -152,6 +152,16 @@ impl ScanEngine {
         }
     }
 
+    /// Оценка пары под бюджет размера (движок исполнения).
+    pub fn eval_with_budget(&self, pair: &Pair, now_ms: i64, budget: SizeBudget) -> PairEval {
+        self.eval_pair(pair, now_ms, Some(budget))
+    }
+
+    /// Настройки.
+    pub fn settings(&self) -> &ScanSettings {
+        &self.settings
+    }
+
     fn eval_pair(&self, pair: &Pair, now_ms: i64, budget: Option<SizeBudget>) -> PairEval {
         let first_seen = |k: &InstrumentKey| self.first_seen.get(&k.id()).copied();
         let s = &self.settings;

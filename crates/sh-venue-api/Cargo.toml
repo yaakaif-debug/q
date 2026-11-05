@@ -20,6 +20,8 @@ thiserror.workspace = true
 tracing.workspace = true
 governor.workspace = true
 metrics.workspace = true
+alloy.workspace = true
+secrecy.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

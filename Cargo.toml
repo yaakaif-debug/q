@@ -12,6 +12,10 @@ members = [
     "crates/sh-obs",
     "crates/sh-signals",
     "crates/sh-portfolio",
+    "crates/sh-sim",
+    "crates/sh-exec",
+    "crates/sh-risk",
+    "crates/sh-strategy",
 ]
 
 [workspace.package]
@@ -32,6 +36,10 @@ sh-store = { path = "crates/sh-store" }
 sh-obs = { path = "crates/sh-obs" }
 sh-signals = { path = "crates/sh-signals" }
 sh-portfolio = { path = "crates/sh-portfolio" }
+sh-sim = { path = "crates/sh-sim" }
+sh-exec = { path = "crates/sh-exec" }
+sh-risk = { path = "crates/sh-risk" }
+sh-strategy = { path = "crates/sh-strategy" }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
@@ -61,6 +69,8 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 tokio-rustls = { version = "0.26", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["std", "aws_lc_rs"] }
 rustls-native-certs = "0.8"
+alloy = { version = "2.5", default-features = false, features = ["signer-local", "std"] }
+libloading = "0.9"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -91,11 +101,23 @@ path = "src/main.rs"
 name = "latency-probe"
 path = "src/bin/latency-probe.rs"
 
+[[bin]]
+name = "spread-ctl"
+path = "src/bin/spread-ctl.rs"
+
+[[bin]]
+name = "backtest"
+path = "src/bin/backtest.rs"
+
 [dependencies]
 sh-core.workspace = true
 sh-md.workspace = true
 sh-signals.workspace = true
 sh-portfolio.workspace = true
+sh-sim.workspace = true
+sh-exec.workspace = true
+sh-risk.workspace = true
+sh-strategy.workspace = true
 sh-venue-api.workspace = true
 sh-venue-hyperliquid.workspace = true
 sh-venue-lighter.workspace = true
@@ -123,6 +145,11 @@ rustls-native-certs.workspace = true
 
 [lints]
 workspace = true
+
+# Отладочная информация в dev выключена: тестовых бинарников много, и с ней
+# каталог target занимает десятки гигабайт.
+[profile.dev]
+debug = 0
 
 [profile.release]
 lto = "fat"
