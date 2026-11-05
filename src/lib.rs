@@ -3,7 +3,9 @@
 
 pub mod config;
 pub mod derive;
+pub mod engine;
 pub mod monitor;
 pub mod replay_source;
 pub mod runner;
 pub mod scan;
+pub mod simdrive;

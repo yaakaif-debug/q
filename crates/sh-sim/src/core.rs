@@ -575,6 +575,20 @@ impl SimCore {
         std::mem::take(&mut self.out)
     }
 
+    /// Задаёт позиции и капитал (восстановление paper после перезапуска). Капитал площадки
+    /// задаётся так, чтобы её equity по текущим ценам совпал с сохранённым.
+    pub fn seed(&mut self, positions: &[(VenueKey, String, Decimal, Option<Px>)], equity: &[(VenueKey, Usd)]) {
+        self.positions.clear();
+        for (v, s, q, px) in positions {
+            let entry = px.map(|p| p.0).unwrap_or_default();
+            self.positions.insert((v.clone(), s.clone()), SimPosition { qty: *q, entry_px: entry });
+        }
+        self.cash.clear();
+        for (v, e) in equity {
+            self.cash.insert(v.clone(), e.0);
+        }
+    }
+
     /// Перевод обеспечения между дексами Hyperliquid.
     pub fn transfer(&mut self, from: &VenueKey, to: &VenueKey, amount: Usd) -> Result<(), ExecError> {
         let avail = self.balance_of(from).available.0;

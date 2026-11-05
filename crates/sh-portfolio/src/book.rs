@@ -151,6 +151,11 @@ impl Book {
         self.positions.get(&key.id()).map(|p| p.qty).unwrap_or_default()
     }
 
+    /// Средняя цена входа инструмента по mid решения.
+    pub fn entry_mid(&self, key: &InstrumentKey) -> Option<Px> {
+        self.positions.get(&key.id()).filter(|p| !p.qty.is_zero()).map(|p| Px(p.entry_mid))
+    }
+
     /// Все ненулевые позиции.
     pub fn positions(&self) -> Vec<(InstrumentKey, Decimal)> {
         self.positions

@@ -167,6 +167,9 @@ pub struct PairJob {
     pub hedge_attempt: u32,
     /// Остаток, который не удалось округлить до лота (журнал).
     pub residual: Decimal,
+    /// Прервана: только отмена живых ордеров, новых нет.
+    #[serde(default)]
+    pub aborted: bool,
     roles: BTreeMap<ClientId, Role>,
     maker_order: Option<LiveOrder>,
     hedge_order: Option<LiveOrder>,
@@ -235,6 +238,7 @@ impl PairJob {
             stopped: false,
             hedge_attempt: 0,
             residual: Decimal::ZERO,
+            aborted: false,
             roles: BTreeMap::new(),
             maker_order: None,
             hedge_order: None,
@@ -267,6 +271,29 @@ impl PairJob {
     /// Останавливает постановку новых дочерних (выход по сигналу риска, тайм-аут).
     pub fn stop(&mut self) {
         self.stopped = true;
+    }
+
+    /// Прерывает задачу: живые ордера отменяются, новые не отправляются
+    /// (замена другой задачей, остановка Halted).
+    pub fn abort(&mut self) {
+        self.aborted = true;
+        self.stopped = true;
+    }
+
+    /// Сворачивает задачу безопасно: вход разворачивает непохеджированный объём на
+    /// мейкер-ноге reduce-only, выход прерывается (kill switch без сброса).
+    pub fn wind_down(&mut self) {
+        self.stopped = true;
+        if self.kind == JobKind::Entry && !self.unhedged().is_zero() {
+            self.state = JobState::Unwinding;
+        } else if self.kind != JobKind::Entry {
+            self.aborted = true;
+        }
+    }
+
+    /// Ордер отклонён риском до отправки.
+    pub fn on_rejected(&mut self, cid: ClientId) {
+        self.on_closed(cid, OrderStatus::Rejected);
     }
 
     /// Заполнение ордера задачи.
@@ -406,6 +433,19 @@ impl PairJob {
     ) -> Vec<JobAction> {
         let mut out = Vec::new();
         if self.state == JobState::Done {
+            return out;
+        }
+        if self.aborted {
+            for o in [&mut self.maker_order, &mut self.hedge_order, &mut self.unwind_order].into_iter().flatten() {
+                if !o.cancel_sent {
+                    o.cancel_sent = true;
+                    out.push(JobAction::Cancel(o.cid));
+                }
+            }
+            if self.maker_order.is_none() && self.hedge_order.is_none() && self.unwind_order.is_none() {
+                self.residual = self.unhedged();
+                self.state = JobState::Done;
+            }
             return out;
         }
         if now_ms - self.started_ms > self.params.max_duration_ms {

@@ -327,6 +327,17 @@ impl OrderTracker {
         cmds
     }
 
+    /// После перезапуска: живые ордера переводятся в `Unknown` и уточняются запросом.
+    pub fn mark_live_unknown(&mut self) {
+        for o in self.orders.values_mut() {
+            if o.is_live() {
+                o.status = OrderStatus::Unknown;
+                o.last_query_ms = None;
+                o.cancel_requested = false;
+            }
+        }
+    }
+
     /// Удаляет закрытые ордера старше `keep_ms` (память ограничена).
     pub fn prune(&mut self, now_ms: i64, keep_ms: i64) {
         self.orders.retain(|_, o| o.is_live() || now_ms - o.updated_ms < keep_ms);
