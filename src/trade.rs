@@ -58,8 +58,7 @@ pub fn engine_settings(cfg: &AppConfig, mode: EngineMode) -> EngineSettings {
         EngineMode::Live => BTreeMap::from([
             (Exchange::Hyperliquid, cfg.venues.hyperliquid.trading_enabled),
             (Exchange::Lighter, cfg.venues.lighter.trading_enabled),
-            // Aster в live — только с M4
-            (Exchange::Aster, false),
+            (Exchange::Aster, cfg.venues.aster.trading_enabled),
         ]),
     };
     EngineSettings {
@@ -99,6 +98,7 @@ pub struct PaperState {
     last_persist_ms: i64,
     key: &'static str,
     dry_run: Option<crate::live::DryRunExecs>,
+    cfg: AppConfig,
 }
 
 impl PaperState {
@@ -142,6 +142,7 @@ impl PaperState {
             last_persist_ms: 0,
             key,
             dry_run: None,
+            cfg: cfg.clone(),
         })
     }
 
@@ -155,6 +156,7 @@ impl PaperState {
         if !out.first_seen.is_empty() {
             self.db.first_seen_insert(&out.first_seen, now_ms).await?;
         }
+        self.db.append_fills(&crate::runner::fill_rows(&out.fills)).await?;
         let rows: Vec<LedgerRow> = out.ledger.iter().map(ledger_row).collect();
         self.db.append_ledger(&rows).await?;
         if out.scanned {
@@ -199,6 +201,11 @@ impl PaperState {
                 let msg = self.driver.command(&c, now_ms);
                 CtlResponse { ok: true, body: msg.into() }
             }
+            CtlRequest::RebalancePlan { in_transit_usd } => {
+                let p = crate::runner::plan_params(&self.cfg, self.driver.engine.book().equity(), in_transit_usd);
+                let plan = self.driver.engine.rebalance_plan(&p);
+                CtlResponse { ok: true, body: serde_json::to_value(plan).unwrap_or_default() }
+            }
         }
     }
 }
@@ -235,6 +242,7 @@ pub async fn paper_loop(
                 let mut out = state.driver.take_output();
                 let o = state.driver.tick(now);
                 out.commands.extend(o.commands);
+                out.fills.extend(o.fills);
                 out.alerts.extend(o.alerts);
                 out.ledger.extend(o.ledger);
                 out.scanned |= o.scanned;

@@ -199,3 +199,11 @@ aster_ws = ""                 # пусто — wss://fstream.asterdex.com
 # Ступень капитала для live (M3: $5k и не больше 2 пар; M4 поднимает до $25k → $50k → $100k).
 max_capital_usd = 5000
 max_pairs = 2
+
+[rebalance]
+# Планировщик перебалансировки (spread-ctl rebalance plan): только неподписанные данные.
+# Публичные адреса депозита по площадкам; ключей здесь нет.
+deposit_addresses = {}
+hyperliquid_account = ""
+min_transfer_usd = 100
+keep_buffer_pct = 10

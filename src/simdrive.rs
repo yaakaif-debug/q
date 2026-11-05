@@ -31,6 +31,7 @@ fn merge(into: &mut EngineOutput, from: EngineOutput) {
     }
     into.first_seen.extend(from.first_seen);
     into.want_snapshots |= from.want_snapshots;
+    into.fills.extend(from.fills);
 }
 
 impl SimDriver {

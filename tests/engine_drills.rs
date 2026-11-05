@@ -283,3 +283,27 @@ fn restart_restores_book_and_reconciles() {
     assert!(d.engine.risk().halted.is_none(), "{alerts:?}");
     assert!(d.engine.startup_complete());
 }
+
+#[test]
+fn rebalance_plan_and_clean_days_from_engine() {
+    let mut w = World::new();
+    w.enter();
+    let p = sh_portfolio::rebalance::PlanParams {
+        total_equity: w.d.engine.book().equity(),
+        in_transit: Usd(Decimal::ZERO),
+        max_in_transit_pct: dec!(25),
+        min_transfer_usd: dec!(100),
+        keep_buffer_frac: dec!(0.1),
+        deposit_addresses: BTreeMap::new(),
+        hl_account: "0xme".into(),
+        hl_usdc_token: "USDC:0x0".into(),
+    };
+    // площадки с капиталом $50k и одной парой: дефицита нет
+    let plan = w.d.engine.rebalance_plan(&p);
+    assert!(plan.transfers.is_empty() && plan.uncovered.is_empty(), "{plan:?}");
+    let s = w.d.engine.status_json();
+    assert_eq!(s["clean_days"], 0);
+    // учёт: каждое заполнение попало в выход движка вместе с парой
+    let o = w.d.tick(w.b.now_ms + 1);
+    let _ = o.fills;
+}

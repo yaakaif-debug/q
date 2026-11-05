@@ -3,6 +3,7 @@
 //! отчёты; позиции по площадкам, сверка и перебалансировка добавляются в M2–M4.
 
 pub mod book;
+pub mod rebalance;
 pub mod report;
 pub mod shadow;
 

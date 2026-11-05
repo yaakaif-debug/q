@@ -18,6 +18,11 @@ pub enum CtlRequest {
     Status,
     /// Команда оператора.
     Command(OperatorCommand),
+    /// План перебалансировки (неподписанные данные).
+    RebalancePlan {
+        /// Уже в пути, $.
+        in_transit_usd: rust_decimal::Decimal,
+    },
 }
 
 /// Ответ демона.

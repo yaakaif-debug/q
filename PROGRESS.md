@@ -18,7 +18,7 @@
 | M1 | `claude/m1-scanner` | M0 | #2 | код готов, PR открыт |
 | M2 | `claude/m2-execution` | M1 | #3 | код готов, PR открыт |
 | M3 | `claude/m3-live-hl-lighter` | M2 | #4 | код готов, PR открыт |
-| M4 | `claude/m4-aster-ramp` | M3 | — | не начат |
+| M4 | `claude/m4-aster-ramp` | M3 | см. ниже | код готов, PR открыт |
 
 ## План по этапам
 
@@ -111,18 +111,22 @@
 - Тесты: защита флагов, наложение live, сквозной тест оболочки live против симулятора.
 - Не делалось (по правилам): dry-run, selftest и 14 дней live — запускает оператор.
 
-### M4 — следующий шаг
+### M4 — готово (код и офлайн-тесты)
 
-Ветка `claude/m4-aster-ramp` от `claude/m3-live-hl-lighter`. План:
+- Aster в live: `trading_enabled = true` допустим, адаптер в `build_execs`, `engine_settings(Live)`.
+- Лестница ступеней `[stage] max_capital_usd ∈ {5000, 25000, 50000, 100000}` (проверка конфига),
+  `clean_days` в `spread-ctl status` и метриках (сутки без CRIT).
+- `sh-portfolio::rebalance` — планировщик с неподписанными данными (`agentSendAsset`, `withdraw3`,
+  описания выводов Lighter/Aster), лимит в пути, Lighter не для срочной маржи;
+  `spread-ctl rebalance plan`, секция `[rebalance]`.
+- Таблица `fills` (миграция 2), заполнения из движка пишутся в paper и live;
+  `spread-ctl export --year [--currency --rates]` (`src/export.rs`).
+- Документация: `docs/ramp.md`.
+- Не делалось (по правилам): live на Aster, ступени капитала — запускает оператор.
 
-1. Aster в live: снять запрет `trading_enabled` в `sh-venue-aster::config`, добавить Aster в
-   `build_execs` и `engine_settings(Live)`.
-2. Ступени капитала $25k → $50k → $100k: `[stage] step = 1|2|3` (или явные значения) и проверка
-   «14 чистых дней» — ступень повышает оператор, движок только показывает метрики и не даёт
-   превысить текущую ступень.
-3. `spread-ctl rebalance plan`: планировщик перебалансировки (`sh-portfolio::rebalance`) — по
-   балансам и марже площадок, лимиту `max_in_transit_pct`, без вывода с Lighter для срочной маржи;
-   выдаёт неподписанные данные переводов для оператора (JSON), ничего не подписывает.
-4. `spread-ctl export --year 2026`: CSV журнала (заполнения, фандинг, комиссии, переводы) в USD,
-   опционально в валюту отчёта по курсу из файла.
-5. Документация, PROGRESS.md, CLAUDE.md, проверки, PR с базой `claude/m3-live-hl-lighter`.
+## Итог
+
+M0–M4 — код готов, PR открыты стеком (#1 → #2 → #3 → #4 → PR M4). M5 и M6 — вне задачи.
+Остаётся оператору: приёмка каждого этапа (SPEC.md, «Milestones»), selftest, paper, live.
+Отложенные мелочи: `spread-ctl reload`, автоматические переводы между дексами S2,
+цена ликвидации в симуляторе, продление listenKey Aster.
