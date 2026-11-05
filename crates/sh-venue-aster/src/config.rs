@@ -36,6 +36,8 @@ pub struct AsterConfig {
     pub open_interest_secs: u64,
     /// Период опроса расчётного фандинга по каждому символу, с; 0 — не опрашивать.
     pub settled_funding_secs: u64,
+    /// Глубина истории расчётного фандинга при первом опросе, ч.
+    pub funding_history_hours: i64,
     /// Плановое переподключение до 24-часового лимита площадки, с.
     pub max_connection_age_secs: u64,
     /// Период пинга (кадр Ping), с.
@@ -61,6 +63,7 @@ impl Default for AsterConfig {
             metadata_refresh_secs: 300,
             open_interest_secs: 300,
             settled_funding_secs: 3600,
+            funding_history_hours: 168,
             max_connection_age_secs: 23 * 3600 + 30 * 60,
             ping_secs: 120,
             idle_timeout_secs: 60,

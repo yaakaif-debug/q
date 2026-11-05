@@ -647,7 +647,14 @@ async fn settled_loop(
             if *shutdown.borrow() {
                 return Ok(());
             }
-            match rest.get(&format!("/fapi/v3/fundingRate?symbol={symbol}&limit=3"), 1).await {
+            let path = match last_seen.get(&symbol) {
+                Some(_) => format!("/fapi/v3/fundingRate?symbol={symbol}&limit=3"),
+                None => {
+                    let start = sinks.clock().wall_ms() - cfg.funding_history_hours.max(1) * 3_600_000;
+                    format!("/fapi/v3/fundingRate?symbol={symbol}&startTime={start}&limit=1000")
+                }
+            };
+            match rest.get(&path, 1).await {
                 Ok(body) => {
                     let Ok(items) = serde_json::from_str::<Vec<FundingRateItem>>(&body) else { continue };
                     let interval = shared.interval(&symbol);

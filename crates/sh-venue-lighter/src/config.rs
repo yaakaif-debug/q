@@ -32,8 +32,10 @@ pub struct LighterConfig {
     pub ws_message_burst: u32,
     /// Период снимка метаданных, с.
     pub metadata_refresh_secs: u64,
-    /// При старте загрузить историю фандинга по каждому рынку (вывод интервала).
+    /// При старте загрузить историю фандинга по каждому рынку (интервал и 7-дневная оценка).
     pub funding_backfill: bool,
+    /// Глубина истории фандинга при старте, ч.
+    pub funding_history_hours: i64,
     /// Период пинга, с (сервер ждёт кадр хотя бы раз в 2 минуты).
     pub ping_secs: u64,
     /// Переподключение при тишине дольше, с.
@@ -57,6 +59,7 @@ impl Default for LighterConfig {
             ws_messages_per_minute: 150,
             metadata_refresh_secs: 300,
             funding_backfill: true,
+            funding_history_hours: 168,
             ping_secs: 30,
             idle_timeout_secs: 60,
         }

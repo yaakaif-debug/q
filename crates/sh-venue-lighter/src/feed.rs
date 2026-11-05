@@ -195,7 +195,7 @@ impl MarketDataVenue for LighterVenue {
             shutdown.clone(),
         ));
         if self.cfg.funding_backfill {
-            tasks.spawn(funding_backfill(rest.clone(), shared.clone(), sinks.clone(), shutdown.clone()));
+            tasks.spawn(funding_backfill(rest.clone(), shared.clone(), sinks.clone(), self.cfg.funding_history_hours, shutdown.clone()));
         }
 
         loop {
@@ -470,6 +470,7 @@ async fn funding_backfill(
     rest: RestClient,
     shared: Arc<Shared>,
     sinks: Sinks,
+    history_hours: i64,
     shutdown: watch::Receiver<bool>,
 ) -> Result<(), VenueError> {
     let markets: Vec<PerpDetail> = shared.markets.read().unwrap_or_else(|e| e.into_inner()).clone();
@@ -479,19 +480,39 @@ async fn funding_backfill(
             return Ok(());
         }
         let path = format!(
-            "/api/v1/fundings?market_id={}&resolution=1h&start_timestamp={}&end_timestamp={}&count_back=6",
+            "/api/v1/fundings?market_id={}&resolution=1h&start_timestamp={}&end_timestamp={}&count_back={}",
             d.market_id,
-            now_s - 8 * 3600,
-            now_s
+            now_s - history_hours.max(8) * 3600,
+            now_s,
+            history_hours.clamp(8, 750)
         );
         match rest.get(&path, 1).await {
             Ok(body) => match serde_json::from_str::<Fundings>(&body) {
                 Ok(f) => {
-                    let mut tr = shared.trackers.lock().unwrap_or_else(|e| e.into_inner());
-                    let t = tr.entry(d.market_id).or_default();
+                    let interval = {
+                        let mut tr = shared.trackers.lock().unwrap_or_else(|e| e.into_inner());
+                        let t = tr.entry(d.market_id).or_default();
+                        for it in &f.fundings {
+                            // в `fundings` время в секундах, в `market_stats` — в миллисекундах
+                            t.observe(it.timestamp * 1000);
+                        }
+                        t.interval_hours()
+                    };
+                    let recv = sinks.now();
                     for it in &f.fundings {
-                        // в `fundings` время в секундах, в `market_stats` — в миллисекундах
-                        t.observe(it.timestamp * 1000);
+                        let ev = MdEvent {
+                            venue: normalize::venue(),
+                            symbol: d.symbol.clone(),
+                            recv,
+                            venue_ts_ms: Some(it.timestamp * 1000),
+                            kind: MdEventKind::Funding(sh_venue_api::FundingUpdate {
+                                settled_rate: Some(normalize::pct(it.rate)),
+                                settled_at_ms: Some(it.timestamp * 1000),
+                                interval_hours: interval,
+                                ..sh_venue_api::FundingUpdate::default()
+                            }),
+                        };
+                        sinks.md(ev).await?;
                     }
                 }
                 Err(e) => tracing::debug!(venue = "lighter", market = d.market_id, error = %e, "fundings parse failed"),

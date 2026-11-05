@@ -42,7 +42,7 @@ pub struct HyperliquidConfig {
     pub predicted_funding_secs: u64,
     /// Период опроса расчётного фандинга `fundingHistory`, с.
     pub settled_funding_secs: u64,
-    /// Глубина первой загрузки истории фандинга, ч.
+    /// Глубина первой загрузки истории фандинга, ч (168 — для 7-дневной оценки спреда).
     pub settled_funding_lookback_hours: u64,
     /// Опрашивать ли расчётный фандинг по каждой монете.
     pub settled_funding_poll: bool,
@@ -73,7 +73,7 @@ impl Default for HyperliquidConfig {
             dex_discovery_secs: 3600,
             predicted_funding_secs: 300,
             settled_funding_secs: 3600,
-            settled_funding_lookback_hours: 6,
+            settled_funding_lookback_hours: 168,
             settled_funding_poll: true,
             ping_secs: 20,
             idle_timeout_secs: 45,
