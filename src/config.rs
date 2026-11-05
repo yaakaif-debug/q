@@ -5,8 +5,12 @@ use std::path::Path;
 
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
+use rust_decimal::Decimal;
+use rust_decimal::dec;
 use serde::Deserialize;
+use sh_core::SecretsSource;
 use sh_obs::{LogConfig, MetricsConfig};
+use sh_signals::{CostParams, FeesConfig, RiskLimits, ScannerParams, StrategyParams};
 use sh_store::RecorderConfig;
 use sh_venue_api::ProxyConfig;
 use sh_venue_aster::AsterConfig;
@@ -29,21 +33,112 @@ pub struct AppConfig {
     pub network: NetworkConfig,
     /// Площадки.
     pub venues: VenuesConfig,
+    /// Сканер и теневой портфель.
+    pub scanner: ScannerParams,
+    /// Стратегии.
+    pub strategy: StrategyParams,
+    /// Модель издержек.
+    pub costs: CostParams,
+    /// Комиссии уровня аккаунта.
+    pub fees: FeesConfig,
+    /// Лимиты риска.
+    pub risk: RiskLimits,
+    /// Сопоставление символов.
+    pub symbols: SymbolsConfig,
+    /// База состояния.
+    pub database: DatabaseConfig,
+    /// Секреты.
+    pub secrets: SecretsConfig,
+    /// Telegram.
+    pub telegram: TelegramConfig,
+}
+
+/// Настройки `[symbols]`.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct SymbolsConfig {
+    /// Файл сопоставления.
+    pub path: String,
+}
+
+impl Default for SymbolsConfig {
+    fn default() -> Self {
+        Self { path: "config/symbols.toml".into() }
+    }
+}
+
+/// Настройки `[database]`.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct DatabaseConfig {
+    /// Файл SQLite.
+    pub path: String,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self { path: "data/state/state.sqlite".into() }
+    }
+}
+
+/// Настройки `[secrets]`.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct SecretsConfig {
+    /// `none`, `credential:<name>` (systemd LoadCredentialEncrypted), `command:<cmd>` (например,
+    /// `age -d -i /root/key.txt /opt/spread-hunter/secrets.toml.age`) или `file:<path>` (права 600, только тест).
+    pub source: String,
+}
+
+impl Default for SecretsConfig {
+    fn default() -> Self {
+        Self { source: "none".into() }
+    }
+}
+
+impl SecretsConfig {
+    /// Разобранный источник.
+    pub fn source(&self) -> Result<SecretsSource, String> {
+        SecretsSource::parse(&self.source).map_err(|e| e.to_string())
+    }
+}
+
+/// Настройки `[telegram]`; токен и чат — в секретах.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct TelegramConfig {
+    /// Включить оповещения.
+    pub enabled: bool,
+    /// Подавление одинаковых оповещений, с.
+    pub dedupe_secs: u64,
+    /// Не больше сообщений в минуту (кроме CRIT).
+    pub per_minute: usize,
+}
+
+impl Default for TelegramConfig {
+    fn default() -> Self {
+        Self { enabled: false, dedupe_secs: 300, per_minute: 20 }
+    }
 }
 
 /// Настройки `[engine]`.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields, default)]
 pub struct EngineConfig {
-    /// Режим: в M0 доступен только `record`.
+    /// Режим: `record`, `scan` (с M1), `paper` (с M2), `live` (с M3).
     pub mode: String,
+    /// Резерв капитала вне площадок, %.
+    pub equity_reserve_pct: Decimal,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        Self { mode: "record".into() }
+        Self { mode: "scan".into(), equity_reserve_pct: dec!(15) }
     }
 }
+
+/// Режимы, доступные в текущем этапе.
+pub const AVAILABLE_MODES: &[&str] = &["record", "scan"];
 
 /// Настройки `[network]`.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -105,9 +200,22 @@ impl AppConfig {
 
     /// Проверка ограничений M0.
     pub fn validate(&self) -> Result<(), String> {
-        if self.engine.mode != "record" {
-            return Err(format!("engine.mode '{}' is not available in M0 (only 'record')", self.engine.mode));
+        if !AVAILABLE_MODES.contains(&self.engine.mode.as_str()) {
+            return Err(format!(
+                "engine.mode '{}' is not available in this build (available: {})",
+                self.engine.mode,
+                AVAILABLE_MODES.join(", ")
+            ));
         }
+        if self.engine.mode == "record" && !self.recorder.enabled {
+            return Err("engine.mode = \"record\" requires recorder.enabled = true".into());
+        }
+        if self.engine.equity_reserve_pct < Decimal::ZERO || self.engine.equity_reserve_pct >= dec!(100) {
+            return Err("engine.equity_reserve_pct must be in [0, 100)".into());
+        }
+        self.risk.validate()?;
+        self.fees.validate()?;
+        self.secrets.source()?;
         self.venues.hyperliquid.validate()?;
         self.venues.lighter.validate()?;
         self.venues.aster.validate()?;
@@ -130,7 +238,7 @@ mod tests {
     fn default_config_file_is_valid() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("config/default.toml");
         let cfg = AppConfig::load(&path, None).unwrap();
-        assert_eq!(cfg.engine.mode, "record");
+        assert!(AVAILABLE_MODES.contains(&cfg.engine.mode.as_str()));
         assert_eq!(cfg.venues.hyperliquid.dexes, "auto");
     }
 
@@ -138,12 +246,15 @@ mod tests {
     fn unknown_keys_are_rejected() {
         assert!(parse("[engine]\nmode = \"record\"\nfoo = 1\n").is_err());
         assert!(parse("[venues.hyperliquid]\nmax_subs = 5\n").is_err());
-        assert!(parse("[strategy.s1_funding_carry]\nmin_net_apr = 12.0\n").is_err());
+        assert!(parse("[strategy.s3_spot_perp]\nmin_net_apr = 12.0\n").is_err());
+        assert!(parse("[strategy.s1_funding_carry]\nmin_net_apr = 12.0\n").is_ok());
     }
 
     #[test]
     fn non_record_modes_and_trading_are_rejected() {
         assert!(parse("[engine]\nmode = \"live\"\n").is_err());
+        assert!(parse("[engine]\nmode = \"record\"\n[recorder]\nenabled = false\n").is_err());
+        assert!(parse("[secrets]\nsource = \"vault:x\"\n").is_err());
         assert!(parse("[venues.aster]\ntrading_enabled = true\n").is_err());
         assert!(parse("[network]\nproxy = \"socks5://x:1\"\n").is_err());
         assert!(parse("").is_ok());

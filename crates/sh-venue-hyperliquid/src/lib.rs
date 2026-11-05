@@ -5,8 +5,10 @@
 pub mod config;
 pub mod feed;
 pub mod normalize;
+pub mod replay;
 pub mod subs;
 pub mod wire;
 
 pub use config::HyperliquidConfig;
 pub use feed::HyperliquidVenue;
+pub use replay::HlReplay;

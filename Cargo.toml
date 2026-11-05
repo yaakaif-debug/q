@@ -10,6 +10,8 @@ members = [
     "crates/sh-md",
     "crates/sh-store",
     "crates/sh-obs",
+    "crates/sh-signals",
+    "crates/sh-portfolio",
 ]
 
 [workspace.package]
@@ -28,6 +30,8 @@ sh-venue-aster = { path = "crates/sh-venue-aster" }
 sh-md = { path = "crates/sh-md" }
 sh-store = { path = "crates/sh-store" }
 sh-obs = { path = "crates/sh-obs" }
+sh-signals = { path = "crates/sh-signals" }
+sh-portfolio = { path = "crates/sh-portfolio" }
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
 tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
@@ -47,6 +51,11 @@ metrics-exporter-prometheus = { version = "0.18", default-features = false, feat
 zstd = "0.14.3"
 governor = "0.10"
 proptest = "1"
+secrecy = { version = "0.10", features = ["serde"] }
+zeroize = "1"
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite"] }
+arrow = { version = "60", default-features = false }
+parquet = { version = "60", default-features = false, features = ["arrow", "zstd"] }
 # Транзитивные зависимости одобренных крейтов, нужные напрямую (см. PR):
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 tokio-rustls = { version = "0.26", default-features = false }
@@ -84,6 +93,9 @@ path = "src/bin/latency-probe.rs"
 
 [dependencies]
 sh-core.workspace = true
+sh-md.workspace = true
+sh-signals.workspace = true
+sh-portfolio.workspace = true
 sh-venue-api.workspace = true
 sh-venue-hyperliquid.workspace = true
 sh-venue-lighter.workspace = true
@@ -102,6 +114,8 @@ anyhow.workspace = true
 tracing.workspace = true
 metrics.workspace = true
 zstd.workspace = true
+rust_decimal.workspace = true
+secrecy.workspace = true
 futures-util.workspace = true
 tokio-rustls.workspace = true
 rustls.workspace = true

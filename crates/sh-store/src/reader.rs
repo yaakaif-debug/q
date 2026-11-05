@@ -25,7 +25,7 @@ pub enum ReadError {
 }
 
 /// Итератор по строкам файла. После ошибки ввода-вывода итерация заканчивается.
-pub fn read_file(path: &Path) -> std::io::Result<impl Iterator<Item = Result<RecordLine, ReadError>>> {
+pub fn read_file(path: &Path) -> std::io::Result<impl Iterator<Item = Result<RecordLine, ReadError>> + use<>> {
     let file = File::open(path)?;
     // Decoder по умолчанию читает все кадры подряд
     let decoder = zstd::stream::read::Decoder::new(file)?;

@@ -13,6 +13,9 @@ serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
+secrecy.workspace = true
+zeroize.workspace = true
+figment.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

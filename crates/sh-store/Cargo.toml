@@ -17,6 +17,9 @@ zstd.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 metrics.workspace = true
+sqlx.workspace = true
+arrow.workspace = true
+parquet.workspace = true
 
 [lints]
 workspace = true

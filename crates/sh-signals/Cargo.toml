@@ -1,0 +1,24 @@
+[package]
+name = "sh-signals"
+description = "Funding normalisation, spread estimators, cost model, s_net/ROC, sizing, pair evaluation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sh-core.workspace = true
+sh-md.workspace = true
+sh-venue-api.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+figment.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

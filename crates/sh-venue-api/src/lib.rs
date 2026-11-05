@@ -23,5 +23,5 @@ pub use meta::{FeeInfo, FeeSource, InstrumentMeta, InstrumentStatus, PriceRule};
 pub use rest::{RestClient, WeightLimiter};
 pub use sink::Sinks;
 pub use subs::{PlanDiff, SubPlan};
-pub use venue::MarketDataVenue;
+pub use venue::{MarketDataVenue, Replay, query_param, rest_body};
 pub use ws::{Backoff, ProxyConfig, WsStream, connect_ws};

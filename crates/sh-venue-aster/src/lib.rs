@@ -4,7 +4,9 @@
 pub mod config;
 pub mod feed;
 pub mod normalize;
+pub mod replay;
 pub mod wire;
 
 pub use config::AsterConfig;
 pub use feed::AsterVenue;
+pub use replay::AsReplay;

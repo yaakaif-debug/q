@@ -5,6 +5,7 @@ pub mod clock;
 pub mod error;
 pub mod num;
 pub mod raw;
+pub mod secrets;
 pub mod serde_util;
 pub mod venue;
 
@@ -13,4 +14,5 @@ pub use error::CoreError;
 pub use num::{Bps, Px, Qty, Usd};
 pub use raw::{RawRecord, RawSource, SysEvent};
 pub use rust_decimal::Decimal;
+pub use secrets::{Secrets, SecretsError, SecretsSource};
 pub use venue::{Collateral, Exchange, Level, Side, UnderlyingId, VenueKey};
